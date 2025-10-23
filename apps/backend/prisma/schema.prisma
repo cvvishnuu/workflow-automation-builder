@@ -1,0 +1,226 @@
+// Prisma schema for Workflow Automation Platform
+// Defines the database models and relationships
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - stores minimal user info (Clerk handles auth)
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique // Clerk user ID
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  workflows  Workflow[]
+  executions WorkflowExecution[]
+
+  @@map("users")
+}
+
+// Workflow model - stores workflow definitions
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  definition  Json // Stores the complete workflow definition (nodes, edges, config)
+  isActive    Boolean  @default(true)
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+
+  @@index([userId])
+  @@map("workflows")
+}
+
+// WorkflowExecution model - stores execution history and results
+model WorkflowExecution {
+  id          String   @id @default(uuid())
+  workflowId  String
+  userId      String
+  status      String // pending, running, completed, failed, cancelled, pending_approval
+  input       Json? // Input data for the execution
+  output      Json? // Final output of the execution
+  error       String? // Error message if failed
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  // Stores the workflow definition snapshot at execution time
+  // This ensures we can replay/analyze even if workflow is modified later
+  workflowSnapshot Json
+
+  // Manual approval fields
+  approvalData   Json? // Data awaiting review (generated content, customer data, etc.)
+  approvalStatus String? // pending_approval, approved, rejected, null
+  approvedBy     String? // User ID who approved/rejected
+  approvedAt     DateTime? // When approval decision was made
+
+  // Relations
+  workflow       Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodeExecutions NodeExecution[]
+
+  @@index([workflowId])
+  @@index([userId])
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([startedAt])
+  @@map("workflow_executions")
+}
+
+// NodeExecution model - stores individual node execution details
+model NodeExecution {
+  id          String   @id @default(uuid())
+  executionId String
+  nodeId      String // ID of the node in the workflow definition
+  nodeType    String // Type of node (trigger, http_request, etc.)
+  status      String // pending, running, completed, failed
+  input       Json? // Input data to this node
+  output      Json? // Output data from this node
+  error       String? // Error message if failed
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  // Relations
+  execution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([nodeId])
+  @@map("node_executions")
+}
+
+// NodeDefinition model - stores reusable node templates (optional for MVP)
+model NodeDefinition {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  nodeType    String
+  config      Json // Default configuration for this node type
+  isPublic    Boolean  @default(false) // If true, available to all users
+  userId      String? // If private, belongs to this user
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([nodeType])
+  @@index([userId])
+  @@map("node_definitions")
+}
+
+// Integration model - stores available integration types
+model Integration {
+  id          String   @id @default(uuid())
+  name        String // e.g., "SendGrid", "Google Calendar", "Twilio WhatsApp"
+  type        String   @unique // e.g., "email", "google_calendar", "whatsapp"
+  description String?
+  authType    String // "api_key", "oauth2", "basic"
+  configSchema Json // JSON schema for configuration
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  credentials Credential[]
+
+  @@map("integrations")
+}
+
+// Credential model - stores encrypted user credentials for integrations
+model Credential {
+  id            String   @id @default(uuid())
+  userId        String
+  integrationId String
+  name          String // User-friendly name for this credential
+  encryptedData String // Encrypted JSON containing API keys, tokens, etc.
+  isActive      Boolean  @default(true)
+  expiresAt     DateTime? // For OAuth tokens
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([integrationId])
+  @@unique([userId, integrationId, name])
+  @@map("credentials")
+}
+
+// WorkflowTemplate model - stores pre-built workflow templates
+model WorkflowTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  category    String // e.g., "Industry-Specific", "Data Processing", "Marketing"
+  icon        String? // Icon name for UI
+  definition  Json // Complete workflow definition
+  metadata    Json? // Additional metadata (tags, industry, etc.)
+  isPublic    Boolean  @default(true)
+  version     String   @default("1.0.0")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([isPublic])
+  @@map("workflow_templates")
+}
+
+// FileUpload model - tracks uploaded files for workflows
+model FileUpload {
+  id           String   @id @default(uuid())
+  userId       String
+  filename     String // Original filename
+  fileHash     String   @unique // SHA-256 hash for deduplication
+  filePath     String // Encrypted file path on disk
+  mimeType     String
+  fileSize     Int // Size in bytes
+  encryptionIv String // Initialization vector for AES encryption
+  metadata     Json? // Additional file metadata (rows, columns, etc.)
+  expiresAt    DateTime? // Auto-delete timestamp
+  createdAt    DateTime @default(now())
+
+  // Relations
+  complianceChecks ComplianceCheck[]
+
+  @@index([userId])
+  @@index([fileHash])
+  @@index([expiresAt])
+  @@map("file_uploads")
+}
+
+// ComplianceCheck model - audit trail for compliance validations
+model ComplianceCheck {
+  id              String   @id @default(uuid())
+  userId          String
+  fileUploadId    String?
+  executionId     String?
+  contentType     String // "email", "sms", "whatsapp", "social"
+  originalContent String   @db.Text // Content that was checked
+  riskScore       Int // 0-100 risk score
+  flaggedTerms    Json // Array of flagged terms with severity
+  suggestions     Json? // Recommended fixes
+  complianceRules Json // Rules that were applied
+  isPassed        Boolean // Whether it passed compliance
+  checkedAt       DateTime @default(now())
+
+  // Relations
+  fileUpload FileUpload? @relation(fields: [fileUploadId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([fileUploadId])
+  @@index([executionId])
+  @@index([riskScore])
+  @@index([checkedAt])
+  @@map("compliance_checks")
+}
