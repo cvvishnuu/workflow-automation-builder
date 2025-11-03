@@ -30,6 +30,12 @@ yarn-error.log*
 # Local env files
 .env*.local
 .env
+/apps/backend/.env
+/apps/backend/.env.example
+/apps/backend/.env.production.example
+/apps/frontend/.env.production.example
+/apps/frontend/.env.example
+/apps/frontend/.env
 
 # Vercel
 .vercel
@@ -49,3 +55,23 @@ yarn-error.log*
 
 # Prisma
 prisma/migrations
+
+# md files
+ANSWERS_TO_YOUR_QUESTIONS.md
+ARCHITECTURE.md
+BSFI_READY_TO_TEST.md
+BSFI_TESTING_COMPLETE.md
+claude.md
+CURRENT_STATUS.md
+DEPLOYMENT-CHECKLIST.md
+DEPLOYMENT-QUICKSTART.md
+DEPLOYMENT-README.md
+DEPLOYMENT.md
+FIXES_APPLIED.md
+PERSONALIZED_WORKFLOW_GUIDE.md
+TESTING_GUIDE.md
+TESTING_REPORT.md
+
+#deployment files
+/apps/backend/recreate-twilio-simple.ts
+apps/backend/recreate-whatsapp-credential-gcm.ts
