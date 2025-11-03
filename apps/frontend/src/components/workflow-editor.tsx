@@ -179,7 +179,7 @@ function WorkflowEditorInner({ definition, onDefinitionChange, onNodeSelect }: W
   const isInitialLoadRef = useRef(true);
 
   // Get execution state for real-time updates
-  const { nodeStatuses, executionStatus } = useExecutionStore();
+  const { nodeStatuses } = useExecutionStore();
 
   // Undo/Redo state
   const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);

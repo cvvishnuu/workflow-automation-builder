@@ -21,7 +21,7 @@ interface ApiKeyState {
   getUsageStats: (id: string) => Promise<ApiKeyUsageStats>;
 }
 
-export const useApiKeyStore = create<ApiKeyState>((set, get) => ({
+export const useApiKeyStore = create<ApiKeyState>((set) => ({
   apiKeys: [],
   isLoading: false,
   error: null,

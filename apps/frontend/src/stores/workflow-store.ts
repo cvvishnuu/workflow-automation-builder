@@ -35,7 +35,7 @@ interface WorkflowStore {
   clearError: () => void;
 }
 
-export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
+export const useWorkflowStore = create<WorkflowStore>((set) => ({
   // Initial state
   workflows: [],
   currentWorkflow: null,

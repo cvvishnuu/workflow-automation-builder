@@ -3,7 +3,7 @@
  * Handles communication with the backend API
  */
 
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
 import type {
   Workflow,
   CreateWorkflowRequest,
