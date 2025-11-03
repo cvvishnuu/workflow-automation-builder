@@ -10,19 +10,18 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seed...');
 
-  // Create mock user for development
+  // Create production user (using your actual Clerk user ID)
   const user = await prisma.user.upsert({
-    where: { id: 'user_123' },
+    where: { clerkId: 'user_34CVC4vAJIDZAJQ4N12degrk4P3' },
     update: {},
     create: {
-      id: 'user_123',
-      clerkId: 'clerk_user_123',
-      email: 'demo@example.com',
-      name: 'Demo User',
+      clerkId: 'user_34CVC4vAJIDZAJQ4N12degrk4P3',
+      email: 'cvishnuu01@gmail.com',
+      name: 'Vishnu',
     },
   });
 
-  console.log('✅ Created user:', user);
+  console.log('✅ Created/updated user:', user);
 
   // Create BFSI Marketing Campaign workflow template
   const bfsiWorkflow = await prisma.workflow.upsert({
