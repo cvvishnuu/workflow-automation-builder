@@ -1,0 +1,22 @@
+# Nixpacks configuration for Railway deployment
+# This tells Railway how to build and deploy the NestJS backend
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "pnpm"]
+
+[phases.install]
+cmds = [
+    "pnpm install --frozen-lockfile --prod=false"
+]
+
+[phases.build]
+cmds = [
+    "pnpm prisma:generate",
+    "pnpm build"
+]
+
+[start]
+cmd = "pnpm prisma:migrate:deploy && pnpm start:prod"
+
+[variables]
+NODE_ENV = "production"
