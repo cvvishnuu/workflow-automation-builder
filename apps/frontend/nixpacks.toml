@@ -1,0 +1,21 @@
+# Nixpacks configuration for Railway frontend deployment
+# Next.js 14 Admin Frontend
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "pnpm"]
+
+[phases.install]
+cmds = [
+    "pnpm install --no-frozen-lockfile --filter @workflow/shared-types --filter @workflow/frontend"
+]
+
+[phases.build]
+cmds = [
+    "pnpm --filter @workflow/frontend build"
+]
+
+[start]
+cmd = "cd apps/frontend && pnpm start"
+
+[variables]
+NODE_ENV = "production"
