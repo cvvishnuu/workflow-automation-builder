@@ -9,6 +9,7 @@
 
 import { create } from 'zustand';
 import type { Workflow, WorkflowDefinition } from '@workflow/shared-types';
+import { NodeType } from '@workflow/shared-types';
 import { workflowsApi } from '@/lib/api';
 
 interface WorkflowStore {
@@ -82,7 +83,7 @@ export const useWorkflowStore = create<WorkflowStore>((set) => ({
           nodes: [
             {
               nodeId: 'trigger-1',
-              type: 'trigger',
+              type: NodeType.TRIGGER,
               label: 'Start',
               position: { x: 250, y: 100 },
               config: { triggerType: 'manual' },

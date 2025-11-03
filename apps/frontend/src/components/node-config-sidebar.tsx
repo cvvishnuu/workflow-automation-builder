@@ -74,7 +74,7 @@ export function NodeConfigSidebar({ node, onClose, onSave }: NodeConfigSidebarPr
           ...prev.config,
           [configField]: value,
         },
-      };
+      } as NodeConfig;
     });
   };
 
@@ -465,24 +465,24 @@ export function NodeConfigSidebar({ node, onClose, onSave }: NodeConfigSidebarPr
         return (
           <>
             <div className="space-y-2">
-              <Label htmlFor="fileId">File ID</Label>
+              <Label htmlFor="fileUploadId">File Upload ID</Label>
               <Input
-                id="fileId"
+                id="fileUploadId"
                 placeholder="file_123abc"
-                value={config.fileId || ''}
-                onChange={(e) => updateNodeConfig('fileId', e.target.value)}
+                value={config.fileUploadId || ''}
+                onChange={(e) => updateNodeConfig('fileUploadId', e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
                 ID of the uploaded CSV file from /api/v1/bfsi/files/upload
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="anonymize">Anonymize PII</Label>
+              <Label htmlFor="anonymizeData">Anonymize PII</Label>
               <Select
-                value={config.anonymize ? 'true' : 'false'}
-                onValueChange={(value) => updateNodeConfig('anonymize', value === 'true')}
+                value={config.anonymizeData ? 'true' : 'false'}
+                onValueChange={(value) => updateNodeConfig('anonymizeData', value === 'true')}
               >
-                <SelectTrigger id="anonymize">
+                <SelectTrigger id="anonymizeData">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

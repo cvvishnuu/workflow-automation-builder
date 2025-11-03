@@ -111,22 +111,22 @@ export class WebSocketClient {
     });
 
     // Listen to node events
-    this.socket.on('node:started', (message: WebSocketMessage) => {
+    this.socket.on('node:started', (message: WebSocketMessage<{ nodeId: string }>) => {
       console.log('[WebSocket] Node started:', message.data?.nodeId);
       this.emit(WebSocketEvent.NODE_STARTED, message);
     });
 
-    this.socket.on('node:completed', (message: WebSocketMessage) => {
+    this.socket.on('node:completed', (message: WebSocketMessage<{ nodeId: string; result: any }>) => {
       console.log('[WebSocket] Node completed:', message.data?.nodeId);
       this.emit(WebSocketEvent.NODE_COMPLETED, message);
     });
 
-    this.socket.on('node:failed', (message: WebSocketMessage) => {
+    this.socket.on('node:failed', (message: WebSocketMessage<{ nodeId: string; error: string }>) => {
       console.log('[WebSocket] Node failed:', message.data?.nodeId);
       this.emit(WebSocketEvent.NODE_FAILED, message);
     });
 
-    this.socket.on('node:retry', (message: WebSocketMessage) => {
+    this.socket.on('node:retry', (message: WebSocketMessage<{ nodeId: string; attempt: number; maxRetries: number }>) => {
       console.log('[WebSocket] Node retry:', message.data?.nodeId,
         `(${message.data?.attempt}/${message.data?.maxRetries})`);
       this.emit(WebSocketEvent.EXECUTION_UPDATED, message);
