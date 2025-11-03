@@ -1,21 +1,23 @@
 # Nixpacks configuration for Railway deployment
-# Frontend Next.js application
+# Frontend deployment from monorepo root
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
+# Install from root to handle workspace dependencies
 cmds = [
-    "pnpm install --no-frozen-lockfile"
+    "cd /app && pnpm install --no-frozen-lockfile"
 ]
 
 [phases.build]
+# Build from frontend directory
 cmds = [
-    "pnpm build"
+    "cd apps/frontend && pnpm build"
 ]
 
 [start]
-cmd = "pnpm start"
+cmd = "cd apps/frontend && pnpm start"
 
 [variables]
 NODE_ENV = "production"
