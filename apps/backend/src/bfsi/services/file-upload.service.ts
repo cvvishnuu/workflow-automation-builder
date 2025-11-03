@@ -315,7 +315,7 @@ export class FileUploadService {
             columnCount: columns.length,
           });
         },
-        error: (error) => {
+        error: (error: Error) => {
           reject(new BadRequestException(`CSV parsing error: ${error.message}`));
         },
       });
