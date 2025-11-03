@@ -17,7 +17,7 @@ cmds = [
 ]
 
 [start]
-cmd = "cd apps/backend && pnpm prisma:migrate:deploy && node dist/main.js"
+cmd = "cd apps/backend && chmod +x start.sh && ./start.sh"
 
 [variables]
 NODE_ENV = "production"
