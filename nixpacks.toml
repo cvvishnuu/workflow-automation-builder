@@ -1,17 +1,15 @@
-# Nixpacks configuration for Railway deployment
-# Backend deployment from monorepo root
+# Nixpacks configuration for Railway monorepo deployment
+# This file should be at the ROOT of the monorepo
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
-# Install from root to handle workspace dependencies
 cmds = [
-    "cd /app && pnpm install --no-frozen-lockfile"
+    "pnpm install --no-frozen-lockfile"
 ]
 
 [phases.build]
-# Build from backend directory
 cmds = [
     "cd apps/backend && pnpm prisma:generate",
     "cd apps/backend && pnpm build"
