@@ -1,6 +1,7 @@
 /**
  * Root application module
  * Imports and configures all feature modules
+ * Updated: Added ApiKeysModule for API key management
  */
 
 import { Module } from '@nestjs/common';
@@ -14,6 +15,9 @@ import { NodesModule } from './nodes/nodes.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { BfsiModule } from './bfsi/bfsi.module';
+import { PublicApiModule } from './public-api/public-api.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -25,6 +29,9 @@ import { BfsiModule } from './bfsi/bfsi.module';
 
     // Database module
     PrismaModule,
+
+    // Health check module
+    HealthModule,
 
     // Users module (global - must be loaded before Auth)
     UsersModule,
@@ -39,6 +46,10 @@ import { BfsiModule } from './bfsi/bfsi.module';
     WebSocketModule,
     IntegrationsModule,
     BfsiModule,
+    ApiKeysModule,
+
+    // Public API module (API key-based auth for customer-facing websites)
+    PublicApiModule,
   ],
 })
 export class AppModule {}

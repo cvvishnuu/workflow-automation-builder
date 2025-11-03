@@ -100,8 +100,8 @@ export default function ApprovalReviewPage() {
       setProcessing(true);
       await executionsApi.approve(executionId, comment);
 
-      // Redirect back to workflows page
-      router.push('/workflows');
+      // Redirect back to workflow editor to see execution continue
+      router.push(`/workflows/${data.workflowId}`);
     } catch (err: any) {
       console.error('Failed to approve:', err);
       setError(err.response?.data?.message || 'Failed to approve content');
@@ -122,8 +122,8 @@ export default function ApprovalReviewPage() {
       setProcessing(true);
       await executionsApi.reject(executionId, comment);
 
-      // Redirect back to workflows page
-      router.push('/workflows');
+      // Redirect back to workflow editor to see execution stopped
+      router.push(`/workflows/${data.workflowId}`);
     } catch (err: any) {
       console.error('Failed to reject:', err);
       setError(err.response?.data?.message || 'Failed to reject content');

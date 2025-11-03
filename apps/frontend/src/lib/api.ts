@@ -11,6 +11,10 @@ import type {
   WorkflowExecution,
   ExecuteWorkflowRequest,
   PaginatedResponse,
+  ApiKey,
+  CreateApiKeyRequest,
+  UpdateApiKeyRequest,
+  ApiKeyUsageStats,
 } from '@workflow/shared-types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
@@ -160,5 +164,72 @@ export const executionsApi = {
    */
   async reject(executionId: string, comment?: string): Promise<void> {
     await apiClient.post(`/executions/${executionId}/reject`, { comment });
+  },
+
+  /**
+   * Cancel a running execution
+   */
+  async cancel(executionId: string): Promise<void> {
+    await apiClient.delete(`/executions/${executionId}`);
+  },
+};
+
+/**
+ * API Keys API
+ */
+export const apiKeysApi = {
+  /**
+   * Get all API keys for the authenticated user
+   */
+  async getAll(): Promise<ApiKey[]> {
+    const response = await apiClient.get<ApiKey[]>('/api-keys');
+    return response.data;
+  },
+
+  /**
+   * Get a single API key by ID
+   */
+  async getById(id: string): Promise<ApiKey> {
+    const response = await apiClient.get<ApiKey>(`/api-keys/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Create a new API key
+   */
+  async create(data: CreateApiKeyRequest): Promise<ApiKey> {
+    const response = await apiClient.post<ApiKey>('/api-keys', data);
+    return response.data;
+  },
+
+  /**
+   * Update an API key
+   */
+  async update(id: string, data: UpdateApiKeyRequest): Promise<ApiKey> {
+    const response = await apiClient.patch<ApiKey>(`/api-keys/${id}`, data);
+    return response.data;
+  },
+
+  /**
+   * Delete an API key
+   */
+  async delete(id: string): Promise<void> {
+    await apiClient.delete(`/api-keys/${id}`);
+  },
+
+  /**
+   * Regenerate an API key (creates new key, invalidates old)
+   */
+  async regenerate(id: string): Promise<ApiKey> {
+    const response = await apiClient.post<ApiKey>(`/api-keys/${id}/regenerate`);
+    return response.data;
+  },
+
+  /**
+   * Get usage statistics for an API key
+   */
+  async getUsageStats(id: string): Promise<ApiKeyUsageStats> {
+    const response = await apiClient.get<ApiKeyUsageStats>(`/api-keys/${id}/usage`);
+    return response.data;
   },
 };

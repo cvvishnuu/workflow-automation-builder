@@ -80,14 +80,6 @@ export class DataTransformNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Get nested value from object using dot notation
-   * @private
-   */
-  private getNestedValue(obj: any, path: string): unknown {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
-  }
-
-  /**
    * Validate data transform node configuration
    */
   validate(node: DataTransformNodeConfig): boolean {

@@ -9,7 +9,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExecutorFactory } from '../nodes/executors/executor.factory';
 import { ExecutionContext } from '../nodes/executors/node-executor.interface';
@@ -31,6 +31,60 @@ export class WorkflowEngineService {
     private readonly executorFactory: ExecutorFactory,
     private readonly eventEmitter: EventEmitter2
   ) {}
+
+  /**
+   * Event listener for execution.start
+   * Triggered when Public API creates a new execution
+   */
+  @OnEvent('execution.start')
+  async handleExecutionStart(payload: {
+    executionId: string;
+    workflowId: string;
+    userId: string;
+    input?: unknown;
+  }) {
+    console.log(`[Workflow Engine] Received execution.start event for execution ${payload.executionId}`);
+
+    try {
+      // Load the execution from database
+      const execution = await this.prisma.workflowExecution.findUnique({
+        where: { id: payload.executionId },
+      });
+
+      if (!execution) {
+        console.error(`[Workflow Engine] Execution ${payload.executionId} not found`);
+        return;
+      }
+
+      if (execution.status !== 'pending') {
+        console.log(`[Workflow Engine] Execution ${payload.executionId} is not pending (status: ${execution.status}), skipping`);
+        return;
+      }
+
+      // Update status to running
+      await this.prisma.workflowExecution.update({
+        where: { id: payload.executionId },
+        data: { status: ExecutionStatus.RUNNING },
+      });
+
+      // Get workflow definition from snapshot
+      const definition = execution.workflowSnapshot as any as WorkflowDefinition;
+
+      // Start workflow execution asynchronously
+      this.runWorkflow(
+        payload.executionId,
+        definition,
+        payload.userId,
+        payload.input
+      ).catch((error) => {
+        console.error(`[Workflow Engine] Workflow execution ${payload.executionId} failed:`, error);
+      });
+
+      console.log(`[Workflow Engine] Started workflow execution ${payload.executionId}`);
+    } catch (error) {
+      console.error(`[Workflow Engine] Error handling execution.start for ${payload.executionId}:`, error);
+    }
+  }
 
   /**
    * Execute a workflow
@@ -626,6 +680,43 @@ export class WorkflowEngineService {
       pageSize: limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * Event listener for execution.approved
+   * Triggered when PublicAPI approves an execution
+   */
+  @OnEvent('execution.approved')
+  async handleExecutionApproved(payload: {
+    executionId: string;
+    workflowId: string;
+    userId: string;
+    comment?: string;
+    timestamp: Date;
+  }) {
+    console.log(`[Workflow Engine] Received execution.approved event for ${payload.executionId}`);
+
+    try {
+      // Check if execution is still pending approval to prevent duplicate processing
+      const execution = await this.prisma.workflowExecution.findUnique({
+        where: { id: payload.executionId },
+        select: { status: true },
+      });
+
+      if (!execution) {
+        console.error(`[Workflow Engine] Execution ${payload.executionId} not found`);
+        return;
+      }
+
+      if (execution.status !== 'pending_approval') {
+        console.log(`[Workflow Engine] Execution ${payload.executionId} already processed (status: ${execution.status}), skipping`);
+        return;
+      }
+
+      await this.resumeExecution(payload.executionId, payload.userId, true, payload.comment);
+    } catch (error) {
+      console.error(`[Workflow Engine] Error handling execution.approved for ${payload.executionId}:`, error);
+    }
   }
 
   /**

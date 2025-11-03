@@ -5,8 +5,8 @@
 
 import { Injectable } from '@nestjs/common';
 import { BaseNodeExecutor } from './base-node.executor';
-import { ExecutionContext, ExecutionResult } from './node-executor.interface';
-import { GoogleCalendarNodeConfig } from '@workflow/shared-types';
+import { ExecutionContext, NodeExecutionResult } from './node-executor.interface';
+import { GoogleCalendarNodeConfig, NodeConfig } from '@workflow/shared-types';
 import { google } from 'googleapis';
 import { CredentialsService } from '../../integrations/credentials/credentials.service';
 
@@ -19,12 +19,13 @@ export class GoogleCalendarNodeExecutor extends BaseNodeExecutor {
   /**
    * Execute the Google Calendar node
    */
-  async execute(
-    node: GoogleCalendarNodeConfig,
+  protected async executeInternal(
+    node: NodeConfig,
     context: ExecutionContext
-  ): Promise<ExecutionResult> {
+  ): Promise<NodeExecutionResult> {
+    const calendarNode = node as GoogleCalendarNodeConfig;
     try {
-      const { config } = node;
+      const { config } = calendarNode;
 
       // Get credentials
       const credentialData = await this.credentialsService.getCredentialData(

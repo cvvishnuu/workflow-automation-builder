@@ -40,6 +40,7 @@ model Workflow {
   // Relations
   user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   executions WorkflowExecution[]
+  apiKeys    ApiKey[] // Public API keys for this workflow/agent
 
   @@index([userId])
   @@map("workflows")
@@ -50,6 +51,7 @@ model WorkflowExecution {
   id          String   @id @default(uuid())
   workflowId  String
   userId      String
+  apiKeyId    String? // If triggered via public API, tracks which API key was used
   status      String // pending, running, completed, failed, cancelled, pending_approval
   input       Json? // Input data for the execution
   output      Json? // Final output of the execution
@@ -70,10 +72,12 @@ model WorkflowExecution {
   // Relations
   workflow       Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey         ApiKey?             @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
   nodeExecutions NodeExecution[]
 
   @@index([workflowId])
   @@index([userId])
+  @@index([apiKeyId])
   @@index([status])
   @@index([approvalStatus])
   @@index([startedAt])
@@ -223,4 +227,36 @@ model ComplianceCheck {
   @@index([riskScore])
   @@index([checkedAt])
   @@map("compliance_checks")
+}
+
+// ApiKey model - for customer-facing websites to access agents via public API
+model ApiKey {
+  id          String   @id @default(uuid())
+  key         String   @unique // SHA-256 hashed API key
+  name        String // "BFSI Campaign Generator Production"
+  description String? // Optional description of the API key usage
+  workflowId  String // Which agent/workflow this key can access
+  projectId   String? // Which customer project owns this key
+  usageLimit  Int      @default(10000) // Monthly execution limit
+  usageCount  Int      @default(0) // Current month usage count
+  lastUsedAt  DateTime? // Last time this key was used
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime? // Optional expiration date
+
+  // Webhook configuration
+  webhookUrl    String? // URL to send execution status updates
+  webhookEvents Json?   // Array of events to subscribe to: ["execution.started", "execution.completed", "execution.failed", "execution.pending_approval"]
+  webhookSecret String? // Secret key for signing webhook payloads (HMAC-SHA256)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workflow   Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+
+  @@index([workflowId])
+  @@index([projectId])
+  @@index([isActive])
+  @@map("api_keys")
 }

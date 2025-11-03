@@ -81,4 +81,51 @@ export abstract class BaseNodeExecutor implements INodeExecutor {
       throw new Error(`Failed to evaluate expression: ${error}`);
     }
   }
+
+  /**
+   * Replace variables in string with context values
+   * Supports {{input.field}}, {{previousOutput.field}}, and {{variables.field}} patterns
+   * @protected
+   */
+  protected replaceVariables(template: string, context: ExecutionContext): string {
+    if (!template) return '';
+
+    let result = template;
+
+    // Replace {{input.field}} patterns
+    const inputData = context.input as any;
+    if (inputData) {
+      result = result.replace(/\{\{input\.(\w+(?:\.\w+)*)\}\}/g, (match, path) => {
+        const value = this.getNestedValue(inputData, path);
+        return value !== undefined ? String(value) : match;
+      });
+    }
+
+    // Replace {{previousOutput.field}} patterns
+    const previousOutput = context.previousNodeOutput as any;
+    if (previousOutput) {
+      result = result.replace(/\{\{previousOutput\.(\w+(?:\.\w+)*)\}\}/g, (match, path) => {
+        const value = this.getNestedValue(previousOutput, path);
+        return value !== undefined ? String(value) : match;
+      });
+    }
+
+    // Replace {{variables.field}} patterns
+    if (context.variables) {
+      result = result.replace(/\{\{variables\.(\w+)\}\}/g, (match, key) => {
+        const value = context.variables[key];
+        return value !== undefined ? String(value) : match;
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Get nested value from object using dot notation
+   * @protected
+   */
+  protected getNestedValue(obj: any, path: string): any {
+    return path.split('.').reduce((current, key) => current?.[key], obj);
+  }
 }

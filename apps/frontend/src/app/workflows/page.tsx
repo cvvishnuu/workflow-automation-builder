@@ -10,7 +10,6 @@ import Link from 'next/link';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { Button } from '@/components/ui/button';
 import { formatDate } from '@/lib/utils';
-import { UserMenu } from '@/components/user-menu';
 
 export default function WorkflowsPage() {
   const { workflows, isLoading, error, fetchWorkflows, createWorkflow, deleteWorkflow } =
@@ -42,10 +41,7 @@ export default function WorkflowsPage() {
     <div className="container mx-auto p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold">My Workflows</h1>
-        <div className="flex items-center gap-4">
-          <Button onClick={handleCreateWorkflow}>Create Workflow</Button>
-          <UserMenu />
-        </div>
+        <Button onClick={handleCreateWorkflow}>Create Workflow</Button>
       </div>
 
       {error && (

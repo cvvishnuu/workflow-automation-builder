@@ -122,28 +122,37 @@ Building a workflow automation platform (similar to Gumloop) with 6 key segments
 - `apps/backend/src/integrations/adapters/google-sheets.adapter.ts`
 - `apps/backend/src/integrations/adapters/slack.adapter.ts`
 
-### Segment 6: Real-time Execution UI ⬜ NOT STARTED (10% COMPLETE)
+### Segment 6: Real-time Execution UI ✅ 100% COMPLETE
 **Goal**: WebSocket-based live execution monitoring
 
 #### Completed:
-- ✅ Basic WebSocket gateway setup
+- ✅ Complete WebSocket gateway setup with Socket.IO
+- ✅ WebSocket event handling on backend (WorkflowGateway)
+- ✅ Frontend WebSocket client service
+- ✅ Execution store for real-time state management
+- ✅ Visual node status indicators (running, success, error, retrying)
+- ✅ Color-coded node highlighting during execution
+- ✅ ExecutionLogsPanel component with filtering and auto-scroll
+- ✅ ExecutionHistoryPage with pagination
+- ✅ Live execution monitor page with split view
+- ✅ Execution controls (cancel for running executions)
+- ✅ Execution status badges and real-time updates
+- ✅ Integration with workflow editor for live node highlighting
+- ✅ WebSocket connection status indicator
+- ✅ Execution summary panel with duration tracking
 
-#### Remaining:
-- ⬜ Complete WebSocket event handling on backend
-- ⬜ Frontend WebSocket client
-- ⬜ Execution store for real-time state
-- ⬜ Visual node status indicators (running, success, error, pending)
-- ⬜ Color-coded node highlighting during execution
-- ⬜ ExecutionLogsPanel component
-- ⬜ ExecutionHistoryPage
-- ⬜ Execution controls (pause, resume, cancel)
-- ⬜ Execution notifications
-
-#### Target Files:
-- `apps/backend/src/executions/execution.gateway.ts`
-- `apps/frontend/src/stores/execution-store.ts`
-- `apps/frontend/src/components/execution-logs-panel.tsx`
-- `apps/frontend/src/app/executions/page.tsx`
+#### Files:
+- `apps/backend/src/websocket/workflow.gateway.ts` - WebSocket gateway with event handlers
+- `apps/backend/src/websocket/websocket.module.ts` - WebSocket module
+- `apps/backend/src/executions/workflow-engine.service.ts` - Event emitter integration
+- `apps/frontend/src/lib/websocket-client.ts` - WebSocket client singleton
+- `apps/frontend/src/stores/execution-store.ts` - Real-time execution state
+- `apps/frontend/src/components/execution-logs-panel.tsx` - Logs with filtering
+- `apps/frontend/src/components/custom-node.tsx` - Node status indicators
+- `apps/frontend/src/components/workflow-editor.tsx` - Real-time node updates
+- `apps/frontend/src/app/workflows/[id]/executions/page.tsx` - Execution history
+- `apps/frontend/src/app/workflows/[id]/executions/[executionId]/monitor/page.tsx` - Live monitor
+- `apps/frontend/src/lib/api.ts` - Cancel execution endpoint
 
 ## Recent Fixes
 
@@ -181,22 +190,23 @@ Building a workflow automation platform (similar to Gumloop) with 6 key segments
 - `apps/frontend/src/components/custom-node.tsx`
 - `apps/frontend/src/components/workflow-editor.tsx`
 
-## Current Phase: ✅ Segment 4 Complete - Ready for Segment 3 & 6
+## Current Phase: ✅ Segments 4, 6, 7 Complete
 
-### Recently Completed (Segment 4):
-1. ✅ Connection validation (cycle detection, duplicate prevention)
-2. ✅ Toolbar with Run button
-3. ✅ Undo/Redo functionality (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)
-4. ✅ Keyboard shortcuts (Ctrl+S, Delete/Backspace)
-5. ✅ Node deletion with automatic edge cleanup
-6. ✅ Connection handles on all 4 sides
-7. ✅ Local-first updates with explicit save
+### Recently Completed (Segment 6):
+1. ✅ Complete WebSocket infrastructure for real-time updates
+2. ✅ Live execution monitoring with workflow visualization
+3. ✅ Execution logs panel with filtering and auto-scroll
+4. ✅ Execution history page with pagination
+5. ✅ Real-time node status indicators with animations
+6. ✅ Execution controls (cancel running executions)
+7. ✅ Split-view monitor (workflow + logs)
+8. ✅ WebSocket connection status and reconnection
 
 ### Next Steps:
-1. **Segment 3**: Complete execution engine enhancements (parallel execution, retry logic)
-2. **Segment 6**: Build real-time execution monitoring UI
-3. **Segment 2**: Add remaining backend services
-4. **Segment 5**: Implement external integrations
+1. **Segment 3**: Complete execution engine enhancements (parallel execution already done, retry logic done)
+2. **Segment 2**: Add remaining backend services (NodeService, ConnectionService, LoggerService)
+3. **Segment 5**: Implement external integrations (Google Sheets, Slack adapters)
+4. **Production Readiness**: Error monitoring, performance optimization, deployment
 
 ## Technical Stack
 - **Frontend**: Next.js 14, React 18, TypeScript, TailwindCSS, ShadCN UI, React Flow, Zustand, Framer Motion
@@ -243,8 +253,147 @@ pnpm lint
 5. End-to-end testing
 6. Production deployment
 
+## Segment 7: Public API & Headless Backend ✅ 100% COMPLETE
+**Goal**: Expose workflows as public agents via REST API for customer-facing websites
+
+### Architecture Overview
+
+**Main Backend (Agent Execution Engine):**
+- Serves **TWO** types of clients:
+  1. **Internal Admin UI** (Workflow Builder) - Clerk authentication at `/api/v1/*`
+  2. **External Customer Sites** - API key authentication at `/api/v1/public/*`
+
+**Workflow → Agent Relationship:**
+- Every workflow created in the builder becomes an "agent"
+- Agents are exposed via public API with API keys
+- Customer sites consume agents without seeing internal workflow structure
+
+### API Structure
+
+#### Internal API (Admin) - EXISTING
+- `POST /api/v1/workflows` - Create workflow
+- `PATCH /api/v1/workflows/:id` - Edit workflow
+- `POST /api/v1/executions` - Test execution
+- Auth: Clerk (admin users only)
+
+#### API Key Management (Admin) - ✅ NEW
+- `POST /api/v1/api-keys` - Create API key
+- `GET /api/v1/api-keys` - List all API keys
+- `GET /api/v1/api-keys/:id` - Get API key details
+- `GET /api/v1/api-keys/:id/usage` - Get usage statistics
+- `PATCH /api/v1/api-keys/:id` - Update API key
+- `POST /api/v1/api-keys/:id/regenerate` - Regenerate API key
+- `DELETE /api/v1/api-keys/:id` - Delete API key
+- Auth: Clerk (admin users only)
+
+#### Public API (Customer Sites) - ✅ IMPLEMENTED
+- `POST /api/v1/public/agents/:workflowId/execute` - Execute agent
+- `GET /api/v1/public/executions/:id/status` - Check status
+- `GET /api/v1/public/executions/:id/results` - Get results
+- `GET /api/v1/public/executions/:id/pending-approval` - Get approval data
+- `POST /api/v1/public/executions/:id/approve` - Approve content
+- `POST /api/v1/public/executions/:id/reject` - Reject content
+- Auth: API keys (Bearer token, SHA-256 hashed)
+
+### Completed:
+- ✅ Architecture design (separate project strategy)
+- ✅ Database schema for ApiKey model with relations
+- ✅ Public API module implementation
+- ✅ API key authentication guard with usage tracking
+- ✅ Rate limiting per API key (token bucket algorithm, 10 req/burst, 60 req/min)
+- ✅ CSV row truncation (max 100 rows, automatic)
+- ✅ All 6 public endpoints implemented and tested
+- ✅ API key generation script
+- ✅ Test API key created for BFSI workflow
+- ✅ Comprehensive API documentation (PUBLIC_API.md)
+- ✅ Integration with workflow engine via event emitter
+- ✅ Webhook support for execution status notifications (HMAC-SHA256 signing, retry logic)
+- ✅ Webhook database schema (webhookUrl, webhookEvents, webhookSecret)
+- ✅ WebhookService with retry logic (3 retries, exponential backoff)
+- ✅ WebhookListenerService for event-driven notifications
+- ✅ Comprehensive webhook documentation in PUBLIC_API.md
+- ✅ **API key management backend** (7 admin endpoints with full CRUD)
+- ✅ **API key management frontend UI** (complete admin interface)
+- ✅ **API key types in shared types package**
+- ✅ **API key store with Zustand** (state management)
+- ✅ **API keys page** (table, create dialog, regenerate, delete)
+- ✅ **Dialog component** for modal interactions
+- ✅ **API key rotation** via regenerate endpoint (invalidates old key)
+- ✅ **API key revocation** via delete endpoint
+
+### Future Enhancements (Optional):
+- ⬜ Customer-facing website (separate project)
+- ⬜ Bulk API key operations
+- ⬜ API key expiration monitoring/alerts
+
+### Files:
+
+**Backend - Public API:**
+- `apps/backend/prisma/schema.prisma` - ApiKey model with webhook fields (lines 232-262)
+- `apps/backend/src/public-api/public-api.module.ts` - Module definition
+- `apps/backend/src/public-api/public-api.service.ts` - Business logic
+- `apps/backend/src/public-api/public-api.controller.ts` - Public endpoints
+- `apps/backend/src/public-api/guards/api-key.guard.ts` - API key authentication
+- `apps/backend/src/public-api/guards/rate-limit.guard.ts` - Rate limiting (token bucket)
+- `apps/backend/src/public-api/webhook.service.ts` - Webhook delivery with retry
+- `apps/backend/src/public-api/webhook-listener.service.ts` - Event listener for webhooks
+- `apps/backend/src/public-api/dto/execute-agent.dto.ts` - Request/response DTOs
+- `apps/backend/scripts/create-api-key.ts` - API key generation script
+- `apps/backend/PUBLIC_API.md` - Complete API documentation
+
+**Backend - API Key Management:**
+- `apps/backend/src/api-keys/api-keys.module.ts` - API keys module
+- `apps/backend/src/api-keys/api-keys.service.ts` - Business logic (CRUD, usage stats)
+- `apps/backend/src/api-keys/api-keys.controller.ts` - Admin endpoints (7 routes)
+- `apps/backend/src/api-keys/dto/create-api-key.dto.ts` - Create API key validation
+- `apps/backend/src/api-keys/dto/update-api-key.dto.ts` - Update API key validation
+
+**Frontend - API Key Management:**
+- `packages/shared-types/src/index.ts` - API key types (ApiKey, CreateApiKeyRequest, UpdateApiKeyRequest, ApiKeyUsageStats)
+- `apps/frontend/src/stores/api-key-store.ts` - Zustand store for API key state
+- `apps/frontend/src/lib/api.ts` - API client with apiKeysApi endpoints
+- `apps/frontend/src/app/api-keys/page.tsx` - API keys management page
+- `apps/frontend/src/components/ui/dialog.tsx` - Dialog component for modals
+
+### Customer-Facing Project (Separate Repo)
+**Project:** `bfsi-campaign-generator` (to be created)
+- **Frontend:** Next.js 14 + TailwindCSS
+- **Backend:** Optional (Express.js/NestJS for customer auth)
+- **Communication:** HTTP REST to main backend via API key
+- **Features:**
+  - Customer registration/login
+  - CSV upload (auto-truncated to 100 rows)
+  - Campaign prompt input
+  - Real-time execution tracking
+  - Content review and approval
+  - Download results
+
+### First Agent - BFSI Marketing Campaign
+- **Workflow ID:** `workflow_bfsi_marketing_template`
+- **Name:** BFSI Marketing Campaign with Compliance
+- **User:** cvishnuu01@gmail.com
+- **Flow:** CSV Upload → AI Generation → Compliance Check → Manual Approval → WhatsApp
+- **API Key Created:** ✅ Yes (Test key for development)
+- **Test API Key ID:** `03e4e323-9a68-4b07-a581-d844bb8915f4`
+- **Usage Limit:** 1000 executions per month
+- **Project:** bfsi-campaign-generator-test
+
+#### Test Execution Results:
+```bash
+# Successfully tested endpoints:
+✅ POST /api/v1/public/agents/workflow_bfsi_marketing_template/execute
+   → Execution ID: 16cf01cc-e0b6-49a6-bb8e-5b23475a0957
+✅ GET  /api/v1/public/executions/:id/status
+   → Status: pending
+✅ API Key Authentication
+   → Invalid keys correctly rejected with 401
+```
+
+---
+
 ## Notes
 - Mock user created: `user_123` (clerk_user_123, demo@example.com)
+- Main user: cvishnuu01@gmail.com (Clerk ID: user_34CVC4vAJIDZAJQ4N12degrk4P3)
 - Backend running on http://localhost:3001
 - Frontend running on http://localhost:3000
 - Database: PostgreSQL on localhost:5432

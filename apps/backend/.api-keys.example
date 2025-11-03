@@ -1,0 +1,48 @@
+# API Keys Reference
+# DO NOT commit this file with real API keys! Use .gitignore to exclude it.
+# This is an example file showing the structure.
+
+## Development API Key (Example)
+# Created: 2025-10-23
+# Workflow: workflow_bfsi_marketing_template
+# ID: 03e4e323-9a68-4b07-a581-d844bb8915f4
+# Usage Limit: 1000/month
+
+# API_KEY=your_api_key_here
+
+## How to Create New API Keys
+
+# Run the API key generation script:
+# npx ts-node scripts/create-api-key.ts
+
+# This will output:
+# - A unique API key (save it immediately!)
+# - API key ID
+# - Associated workflow ID
+# - Usage limits
+
+## How to Use
+
+# Include the API key in requests:
+# Authorization: Bearer YOUR_API_KEY
+
+# Example curl command:
+# curl -X POST http://localhost:3001/api/v1/public/agents/WORKFLOW_ID/execute \
+#   -H "Authorization: Bearer YOUR_API_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{"input": {...}}'
+
+## Security Notes
+
+# ✅ DO:
+# - Store API keys in environment variables
+# - Use separate keys for dev/staging/production
+# - Rotate keys regularly
+# - Monitor usage and set limits
+# - Use HTTPS in production
+
+# ❌ DON'T:
+# - Commit API keys to git
+# - Share API keys in public channels
+# - Use development keys in production
+# - Store keys in plain text in production code

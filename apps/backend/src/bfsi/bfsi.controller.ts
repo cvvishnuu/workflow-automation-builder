@@ -23,7 +23,8 @@ import { AuditService } from './services/audit.service';
 import { FileUploadResponseDto } from './dto/file-upload.dto';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { User, AuthenticatedUser } from '../auth/user.decorator';
-import type { File as MulterFile } from 'multer';
+
+type MulterFile = Express.Multer.File;
 
 @ApiTags('BFSI')
 @ApiBearerAuth()

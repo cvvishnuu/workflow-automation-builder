@@ -42,7 +42,77 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
       inputData?.fileUploadId;
 
     if (!fileUploadId) {
-      // For testing: Auto-upload the test CSV if no file ID provided
+      // Check if inline CSV data is provided in the input
+      const csvData = inputData?.csvData;
+
+      if (csvData && Array.isArray(csvData) && csvData.length > 0) {
+        // Process inline CSV data directly without file upload
+        console.log(`[CSV Upload] Processing inline CSV data with ${csvData.length} rows`);
+
+        try {
+          let processedRows = csvData;
+          let anonymizationMapping: Record<string, string> = {};
+          let detectedPII: any[] = [];
+
+          // Extract columns from first row
+          const columns = Object.keys(csvData[0]);
+
+          // Apply anonymization if enabled
+          if (config.anonymizeData !== false) {
+            const anonymizationOptions = {
+              detectEmail: config.detectEmail !== false,
+              detectPhone: config.detectPhone !== false,
+              detectPAN: config.detectPAN !== false,
+              detectAadhaar: config.detectAadhaar !== false,
+              detectName: config.detectName !== false,
+              customFields: config.customFields || [],
+              preserveFormat: true,
+            };
+
+            const batchSize = config.batchSize || 100;
+            const anonymizedBatches: any[] = [];
+
+            for (let i = 0; i < csvData.length; i += batchSize) {
+              const batch = csvData.slice(i, i + batchSize);
+              const result = this.anonymizationService.anonymizeBatch(
+                batch,
+                anonymizationOptions
+              );
+
+              anonymizedBatches.push(...result.anonymizedData);
+              detectedPII.push(...result.allDetectedPII);
+              Object.assign(anonymizationMapping, result.globalMapping);
+            }
+
+            processedRows = anonymizedBatches;
+          }
+
+          return {
+            success: true,
+            output: {
+              fileUploadId: null,
+              columns,
+              rowCount: csvData.length,
+              columnCount: columns.length,
+              rows: processedRows,
+              anonymizationApplied: config.anonymizeData !== false,
+              detectedPII: detectedPII.length,
+              piiDetails: detectedPII.slice(0, 10),
+              anonymizationMapping:
+                Object.keys(anonymizationMapping).length > 0
+                  ? '[REDACTED - Stored securely]'
+                  : null,
+            },
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: `Failed to process inline CSV data: ${error.message}`,
+          };
+        }
+      }
+
+      // For testing: Auto-upload the test CSV if no file ID or inline data provided
       // This allows the workflow to work out-of-the-box for demo purposes
       if (!context.userId) {
         return {
@@ -76,7 +146,7 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
       } catch (error) {
         return {
           success: false,
-          error: `Failed to auto-upload test CSV: ${error.message}. Please provide a fileUploadId.`,
+          error: `Failed to auto-upload test CSV: ${error.message}. Please provide a fileUploadId or csvData in input.`,
         };
       }
     }

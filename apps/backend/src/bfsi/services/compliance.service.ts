@@ -15,7 +15,7 @@ import { Injectable } from '@nestjs/common';
 export interface ComplianceCheckRequest {
   content: string;
   contentType: 'email' | 'sms' | 'whatsapp' | 'social';
-  productCategory?: 'banking' | 'investment' | 'insurance' | 'loan' | 'general';
+  productCategory?: 'banking' | 'investment' | 'insurance' | 'loan' | 'credit-card' | 'general';
 }
 
 export interface ComplianceCheckResult {
@@ -71,6 +71,7 @@ export class ComplianceService {
     investment: ['subject to market risks', 'read all scheme-related documents', 'past performance'],
     insurance: ['terms and conditions', 'exclusions apply', 'claim settlement'],
     loan: ['subject to credit approval', 'processing fees', 'terms and conditions'],
+    'credit-card': ['terms and conditions', 'eligibility criteria', 'fees and charges'],
     general: ['terms and conditions'],
   };
 
@@ -80,6 +81,7 @@ export class ComplianceService {
     insurance: ['policy', 'premium', 'coverage', 'claim', 'sum assured'],
     loan: ['loan', 'emi', 'interest rate', 'credit', 'repayment'],
     banking: ['account', 'deposit', 'savings', 'current account', 'fixed deposit'],
+    'credit-card': ['credit card', 'cashback', 'rewards', 'credit limit', 'apr', 'annual fee'],
   };
 
   /**
@@ -204,7 +206,7 @@ export class ComplianceService {
    */
   private detectProductCategory(
     content: string
-  ): 'banking' | 'investment' | 'insurance' | 'loan' | 'general' {
+  ): 'banking' | 'investment' | 'insurance' | 'loan' | 'credit-card' | 'general' {
     const contentLower = content.toLowerCase();
 
     for (const [category, keywords] of Object.entries(this.PRODUCT_KEYWORDS)) {

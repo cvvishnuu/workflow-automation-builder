@@ -16,7 +16,8 @@ import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as Papa from 'papaparse';
-import type { File as MulterFile } from 'multer';
+
+type MulterFile = Express.Multer.File;
 
 export interface FileUploadResult {
   id: string;

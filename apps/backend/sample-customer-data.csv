@@ -1,0 +1,21 @@
+customerId,firstName,lastName,email,phone,age,accountType,balance,creditScore,city,state,country,productInterest,lastInteractionDate,preferredChannel
+CUST001,Rajesh,Kumar,rajesh.kumar@email.com,+91-9876543210,35,Savings,125000,750,Mumbai,Maharashtra,India,credit-card,2024-01-15,email
+CUST002,Priya,Sharma,priya.sharma@email.com,+91-9876543211,28,Current,250000,720,Delhi,Delhi,India,investment,2024-01-20,whatsapp
+CUST003,Amit,Patel,amit.patel@email.com,+91-9876543212,42,Savings,500000,780,Ahmedabad,Gujarat,India,loan,2024-01-18,email
+CUST004,Sneha,Reddy,sneha.reddy@email.com,+91-9876543213,31,Salary,180000,690,Hyderabad,Telangana,India,insurance,2024-01-22,sms
+CUST005,Vikram,Singh,vikram.singh@email.com,+91-9876543214,45,Business,750000,800,Bangalore,Karnataka,India,investment,2024-01-19,email
+CUST006,Ananya,Iyer,ananya.iyer@email.com,+91-9876543215,26,Savings,95000,670,Chennai,Tamil Nadu,India,credit-card,2024-01-21,whatsapp
+CUST007,Rahul,Desai,rahul.desai@email.com,+91-9876543216,38,Current,320000,740,Pune,Maharashtra,India,loan,2024-01-17,email
+CUST008,Kavita,Menon,kavita.menon@email.com,+91-9876543217,33,Savings,210000,710,Kochi,Kerala,India,banking,2024-01-23,email
+CUST009,Suresh,Nair,suresh.nair@email.com,+91-9876543218,50,Premium,1200000,820,Mumbai,Maharashtra,India,investment,2024-01-16,email
+CUST010,Deepa,Joshi,deepa.joshi@email.com,+91-9876543219,29,Savings,145000,680,Jaipur,Rajasthan,India,insurance,2024-01-24,sms
+CUST011,Arjun,Malhotra,arjun.malhotra@email.com,+91-9876543220,36,Current,280000,760,Chandigarh,Punjab,India,credit-card,2024-01-20,whatsapp
+CUST012,Meera,Kapoor,meera.kapoor@email.com,+91-9876543221,41,Business,650000,790,Delhi,Delhi,India,loan,2024-01-19,email
+CUST013,Karthik,Krishnan,karthik.k@email.com,+91-9876543222,27,Savings,88000,660,Bangalore,Karnataka,India,banking,2024-01-25,email
+CUST014,Pooja,Gupta,pooja.gupta@email.com,+91-9876543223,34,Salary,195000,730,Noida,Uttar Pradesh,India,investment,2024-01-18,email
+CUST015,Sanjay,Rao,sanjay.rao@email.com,+91-9876543224,47,Premium,980000,810,Hyderabad,Telangana,India,credit-card,2024-01-22,whatsapp
+CUST016,Nisha,Bose,nisha.bose@email.com,+91-9876543225,30,Savings,165000,700,Kolkata,West Bengal,India,insurance,2024-01-21,sms
+CUST017,Manish,Agarwal,manish.agarwal@email.com,+91-9876543226,39,Current,340000,770,Indore,Madhya Pradesh,India,loan,2024-01-17,email
+CUST018,Divya,Pillai,divya.pillai@email.com,+91-9876543227,32,Savings,220000,720,Trivandrum,Kerala,India,banking,2024-01-23,email
+CUST019,Rohit,Verma,rohit.verma@email.com,+91-9876543228,44,Business,720000,795,Gurgaon,Haryana,India,investment,2024-01-16,email
+CUST020,Anjali,Saxena,anjali.saxena@email.com,+91-9876543229,25,Savings,72000,650,Lucknow,Uttar Pradesh,India,credit-card,2024-01-24,whatsapp

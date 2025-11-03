@@ -474,6 +474,77 @@ export type WebSocketEventMessage =
   | WebSocketMessage;
 
 // ============================================================================
+// API Key Types
+// ============================================================================
+
+/**
+ * API Key entity (as stored in database)
+ */
+export interface ApiKey {
+  id: string;
+  key?: string; // Hash - only returned as plainKey on create/regenerate
+  plainKey?: string; // Only returned once on create/regenerate
+  name: string;
+  description?: string;
+  workflowId: string;
+  projectId?: string;
+  usageLimit: number;
+  usageCount: number;
+  lastUsedAt?: Date;
+  isActive: boolean;
+  expiresAt?: Date;
+  webhookUrl?: string;
+  webhookEvents?: string[];
+  webhookSecret?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  workflow?: Workflow; // Optional expanded relation
+  recentExecutions?: WorkflowExecution[]; // Optional recent executions
+}
+
+/**
+ * Request to create a new API key
+ */
+export interface CreateApiKeyRequest {
+  name: string;
+  description?: string;
+  workflowId: string;
+  projectId?: string;
+  usageLimit?: number;
+  expiresAt?: string | Date;
+  webhookUrl?: string;
+  webhookEvents?: string[];
+  webhookSecret?: string;
+}
+
+/**
+ * Request to update an API key
+ */
+export interface UpdateApiKeyRequest {
+  name?: string;
+  description?: string;
+  usageLimit?: number;
+  isActive?: boolean;
+  webhookUrl?: string;
+  webhookEvents?: string[];
+  webhookSecret?: string;
+}
+
+/**
+ * API key usage statistics
+ */
+export interface ApiKeyUsageStats {
+  apiKeyId: string;
+  usageCount: number;
+  usageLimit: number;
+  usagePercentage: number;
+  executionStats: {
+    status: ExecutionStatus;
+    count: number;
+  }[];
+}
+
+// ============================================================================
 // Error Types
 // ============================================================================
 

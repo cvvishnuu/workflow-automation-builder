@@ -78,40 +78,6 @@ export class HttpRequestNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Replace variables in strings with actual values from context
-   * Supports syntax: {{variableName}} or {{previousNodeOutput.field}}
-   * @private
-   */
-  private replaceVariables(str: string, context: ExecutionContext): string {
-    return str.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
-      const trimmedVar = varName.trim();
-
-      // Check if accessing previous node output
-      if (trimmedVar.startsWith('previousNodeOutput.')) {
-        const path = trimmedVar.substring('previousNodeOutput.'.length);
-        const value = this.getNestedValue(context.previousNodeOutput, path);
-        return value !== undefined ? String(value) : match;
-      }
-
-      // Check in variables
-      if (context.variables[trimmedVar] !== undefined) {
-        return String(context.variables[trimmedVar]);
-      }
-
-      // Return original if not found
-      return match;
-    });
-  }
-
-  /**
-   * Get nested value from object using dot notation
-   * @private
-   */
-  private getNestedValue(obj: any, path: string): unknown {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
-  }
-
-  /**
    * Validate HTTP request node configuration
    */
   validate(node: HttpRequestNodeConfig): boolean {

@@ -5,8 +5,8 @@
 
 import { Injectable } from '@nestjs/common';
 import { BaseNodeExecutor } from './base-node.executor';
-import { ExecutionContext, ExecutionResult } from './node-executor.interface';
-import { EmailNodeConfig } from '@workflow/shared-types';
+import { ExecutionContext, NodeExecutionResult } from './node-executor.interface';
+import { EmailNodeConfig, NodeConfig } from '@workflow/shared-types';
 import * as sgMail from '@sendgrid/mail';
 import { CredentialsService } from '../../integrations/credentials/credentials.service';
 
@@ -19,9 +19,10 @@ export class EmailNodeExecutor extends BaseNodeExecutor {
   /**
    * Execute the email node
    */
-  async execute(node: EmailNodeConfig, context: ExecutionContext): Promise<ExecutionResult> {
+  protected async executeInternal(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
+    const emailNode = node as EmailNodeConfig;
     try {
-      const { config } = node;
+      const { config } = emailNode;
 
       // Get credentials
       const credentialData = await this.credentialsService.getCredentialData(
