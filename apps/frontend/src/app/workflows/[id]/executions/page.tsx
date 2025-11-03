@@ -82,20 +82,20 @@ export default function ExecutionHistoryPage() {
 
   const getStatusBadge = (status: ExecutionStatus) => {
     const variants: Record<ExecutionStatus, 'default' | 'secondary' | 'destructive'> = {
-      PENDING: 'secondary',
-      RUNNING: 'default',
-      COMPLETED: 'default',
-      FAILED: 'destructive',
-      CANCELLED: 'secondary',
+      pending: 'secondary',
+      running: 'default',
+      completed: 'default',
+      failed: 'destructive',
+      cancelled: 'secondary',
       pending_approval: 'secondary',
     };
 
     const colors: Record<ExecutionStatus, string> = {
-      PENDING: 'bg-gray-100 text-gray-800',
-      RUNNING: 'bg-blue-100 text-blue-800',
-      COMPLETED: 'bg-green-100 text-green-800',
-      FAILED: 'bg-red-100 text-red-800',
-      CANCELLED: 'bg-yellow-100 text-yellow-800',
+      pending: 'bg-gray-100 text-gray-800',
+      running: 'bg-blue-100 text-blue-800',
+      completed: 'bg-green-100 text-green-800',
+      failed: 'bg-red-100 text-red-800',
+      cancelled: 'bg-yellow-100 text-yellow-800',
       pending_approval: 'bg-purple-100 text-purple-800',
     };
 
@@ -241,7 +241,7 @@ export default function ExecutionHistoryPage() {
                           <Eye className="w-4 h-4 mr-2" />
                           View
                         </Button>
-                        {execution.status === 'RUNNING' && (
+                        {execution.status === 'running' && (
                           <Button
                             variant="default"
                             size="sm"
