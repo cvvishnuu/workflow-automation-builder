@@ -13,8 +13,8 @@ cmds = [
 [phases.build]
 cmds = [
     "pnpm --filter @workflow/shared-types build",
-    "pnpm --filter @workflow/backend prisma:generate",
-    "pnpm --filter @workflow/backend build"
+    "cd apps/backend && pnpm prisma:generate",
+    "pnpm --filter @workflow/backend build"    
 ]
 
 [start]
