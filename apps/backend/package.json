@@ -19,9 +19,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:generate": "pnpm dlx prisma@5.10.2 generate --schema ./prisma/schema.prisma",
-    "prisma:migrate:deploy": "pnpm dlx prisma@5.10.2 migrate deploy --schema ./prisma/schema.prisma",
-    "prisma:seed": "pnpm dlx prisma@5.10.2 db seed --schema ./prisma/schema.prisma",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:seed": "prisma db seed",
     "clean": "rm -rf dist",
     "deploy:railway": "railway up"
   },
