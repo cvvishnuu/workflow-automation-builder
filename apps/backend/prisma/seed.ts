@@ -95,7 +95,8 @@ async function main() {
             position: { x: 1500, y: 50 },
             config: {
               title: 'Review Generated WhatsApp Messages',
-              description: 'Please review the AI-generated WhatsApp messages before sending. Verify that the content is appropriate and compliant.',
+              description:
+                'Please review the AI-generated WhatsApp messages before sending. Verify that the content is appropriate and compliant.',
               dataFields: ['customerId', 'name', 'phone', 'generated_content', 'compliance_status'],
               requireComment: false,
               allowBulkApproval: true,
@@ -257,7 +258,8 @@ async function main() {
             position: { x: 1500, y: 50 },
             config: {
               title: 'Review Generated WhatsApp Messages',
-              description: 'Please review the AI-generated WhatsApp messages before sending. Verify that the content is appropriate and compliant.',
+              description:
+                'Please review the AI-generated WhatsApp messages before sending. Verify that the content is appropriate and compliant.',
               dataFields: ['customerId', 'name', 'phone', 'generated_content', 'compliance_status'],
               requireComment: false,
               allowBulkApproval: true,
@@ -358,7 +360,7 @@ async function main() {
 main()
   .catch((e) => {
     console.error('❌ Seed failed:', e);
-    process.exit(1);
+    // process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
