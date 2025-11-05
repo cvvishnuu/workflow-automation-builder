@@ -4,7 +4,6 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { randomBytes, createHash } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -26,7 +25,13 @@ async function main() {
       where: { email: 'cvishnuu01@gmail.com' },
     });
 
-    let user: any;
+    interface User {
+      id: string;
+      email: string;
+      clerkId: string;
+    }
+
+    let user: User;
 
     // If there's a user with the clerkId but wrong email, UPDATE it
     if (existingUserByClerkId && existingUserByClerkId.email !== 'cvishnuu01@gmail.com') {
@@ -412,57 +417,21 @@ async function main() {
       name: bfsiWorkflow.name,
     });
 
-    // Create default CSV file metadata for testing
-    console.log('📄 Creating default CSV file metadata for testing...');
+    // Create default CSV file for testing
+    // NOTE: We write the plain CSV to /tmp/ so the CSV upload executor can auto-upload it
+    // The executor will read it and use FileUploadService.uploadFile() which handles encryption
+    console.log('📄 Creating default test CSV file in /tmp/...');
     const defaultCSVData = `customerId,name,phone,email,age,income,creditScore
 1,Rajesh Kumar,+919876543210,rajesh.kumar@example.com,35,75000,720
 2,Priya Sharma,+919876543211,priya.sharma@example.com,28,90000,780
 3,Amit Patel,+919876543212,amit.patel@example.com,42,120000,650`;
 
-    // Generate file hash
-    const fileHash = createHash('sha256').update(defaultCSVData).digest('hex');
-
-    // Generate encryption IV (initialization vector)
-    const encryptionIv = randomBytes(16).toString('hex');
-
     // Write CSV file to /tmp for CSV upload executor fallback
     const fs = await import('fs/promises');
     await fs.writeFile('/tmp/test_customers.csv', defaultCSVData, 'utf-8');
 
-    const defaultCSVFile = await prisma.fileUpload.upsert({
-      where: { fileHash },
-      update: {
-        filename: 'test_customers.csv',
-        filePath: '/tmp/test_customers.csv',
-        mimeType: 'text/csv',
-        fileSize: defaultCSVData.length,
-        userId: user.id,
-        metadata: {
-          rows: 3,
-          columns: 7,
-          headers: ['customerId', 'name', 'phone', 'email', 'age', 'income', 'creditScore'],
-        },
-      },
-      create: {
-        filename: 'test_customers.csv',
-        fileHash,
-        filePath: '/tmp/test_customers.csv',
-        mimeType: 'text/csv',
-        fileSize: defaultCSVData.length,
-        encryptionIv,
-        userId: user.id,
-        metadata: {
-          rows: 3,
-          columns: 7,
-          headers: ['customerId', 'name', 'phone', 'email', 'age', 'income', 'creditScore'],
-        },
-      },
-    });
-
-    console.log('✅ Created default CSV file:', {
-      id: defaultCSVFile.id,
-      filename: defaultCSVFile.filename,
-    });
+    console.log('✅ Created test CSV file: /tmp/test_customers.csv');
+    console.log('   (CSV upload executor will auto-upload and encrypt this when needed)');
 
     console.log('');
     console.log('🎉 Seed completed successfully!');
@@ -470,7 +439,7 @@ async function main() {
     console.log('📋 Summary:');
     console.log('  • User created:', user.email);
     console.log('  • Workflow created:', bfsiWorkflow.id);
-    console.log('  • Default CSV file created:', defaultCSVFile.filename);
+    console.log('  • Test CSV created: /tmp/test_customers.csv');
     console.log('');
   } catch (error) {
     console.error('');
