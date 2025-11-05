@@ -17,7 +17,7 @@ async function main() {
     // Create production user (using your actual Clerk user ID)
     console.log('👤 Creating/updating user...');
 
-    // Clean up any conflicting users first
+    // Clean up any conflicting users and ensure correct user exists
     const existingUserByClerkId = await prisma.user.findUnique({
       where: { clerkId: 'user_34CVC4vAJIDZAJQ4N12degrk4P3' },
     });
@@ -26,23 +26,34 @@ async function main() {
       where: { email: 'cvishnuu01@gmail.com' },
     });
 
-    // If there's a user with the clerkId but wrong email, or a user with email but wrong clerkId, delete them
+    let user: any;
+
+    // If there's a user with the clerkId but wrong email, UPDATE it
     if (existingUserByClerkId && existingUserByClerkId.email !== 'cvishnuu01@gmail.com') {
-      console.log('  Deleting user with clerkId but wrong email...');
-      await prisma.user.delete({ where: { id: existingUserByClerkId.id } });
+      console.log('  Updating user with clerkId but wrong email...');
+      user = await prisma.user.update({
+        where: { id: existingUserByClerkId.id },
+        data: { email: 'cvishnuu01@gmail.com', name: 'Vishnu' },
+      });
     }
-
-    if (existingUserByEmail && existingUserByEmail.clerkId !== 'user_34CVC4vAJIDZAJQ4N12degrk4P3') {
-      console.log('  Deleting user with email but wrong clerkId...');
-      await prisma.user.delete({ where: { id: existingUserByEmail.id } });
+    // If there's a user with the email but wrong clerkId, UPDATE it
+    else if (
+      existingUserByEmail &&
+      existingUserByEmail.clerkId !== 'user_34CVC4vAJIDZAJQ4N12degrk4P3'
+    ) {
+      console.log('  Updating user with email but wrong clerkId...');
+      user = await prisma.user.update({
+        where: { id: existingUserByEmail.id },
+        data: { clerkId: 'user_34CVC4vAJIDZAJQ4N12degrk4P3', name: 'Vishnu' },
+      });
     }
-
-    // Now create or find the correct user
-    let user = await prisma.user.findUnique({
-      where: { clerkId: 'user_34CVC4vAJIDZAJQ4N12degrk4P3' },
-    });
-
-    if (!user) {
+    // If user exists with correct details, use it
+    else if (existingUserByClerkId) {
+      console.log('  User already exists with correct details');
+      user = existingUserByClerkId;
+    }
+    // Otherwise create new user
+    else {
       console.log('  Creating new user...');
       user = await prisma.user.create({
         data: {
@@ -51,8 +62,6 @@ async function main() {
           name: 'Vishnu',
         },
       });
-    } else {
-      console.log('  User already exists with correct details');
     }
 
     console.log('✅ User ready:', { id: user.id, email: user.email, clerkId: user.clerkId });

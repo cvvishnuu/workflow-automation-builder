@@ -184,7 +184,8 @@ export class PublicApiService {
       name: row.name || row.customer_name || 'Unknown',
       product: row.product || row.product_name || 'Unknown',
       message: row.generated_content || row.message || '',
-      complianceScore: row.compliance_risk_score || row.complianceScore || 0,
+      // Convert risk score to compliance score (risk score: lower is better, compliance score: higher is better)
+      complianceScore: 100 - (row.compliance_risk_score || row.complianceScore || 0),
       complianceStatus: this.mapComplianceStatus(row.compliance_status || row.complianceStatus),
       violations: row.violations || row.flagged_terms || [],
     }));
