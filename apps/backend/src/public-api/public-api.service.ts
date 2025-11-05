@@ -12,18 +12,13 @@ import { ExecuteAgentDto } from './dto/execute-agent.dto';
 export class PublicApiService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   /**
    * Execute an agent (workflow) via public API
    */
-  async executeAgent(
-    workflowId: string,
-    userId: string,
-    apiKeyId: string,
-    dto: ExecuteAgentDto,
-  ) {
+  async executeAgent(workflowId: string, userId: string, apiKeyId: string, dto: ExecuteAgentDto) {
     // Get workflow definition
     const workflow = await this.prisma.workflow.findUnique({
       where: { id: workflowId },
@@ -158,7 +153,58 @@ export class PublicApiService {
       throw new NotFoundException('Execution not found or not pending approval');
     }
 
-    return execution;
+    // Transform approvalData to match frontend expectations
+    const transformedApprovalData = this.transformApprovalData(execution.approvalData);
+
+    return {
+      executionId: execution.id,
+      workflowId: execution.workflowId,
+      status: execution.status,
+      approvalData: transformedApprovalData,
+      startedAt: execution.startedAt,
+    };
+  }
+
+  /**
+   * Transform approval data from backend format to frontend format
+   * Backend: { rows: [{ generated_content, compliance_status, compliance_risk_score }] }
+   * Frontend: { generatedContent: [{ message, complianceStatus, complianceScore }] }
+   */
+  private transformApprovalData(approvalData: any): any {
+    if (!approvalData) {
+      return { generatedContent: [] };
+    }
+
+    // Extract rows from nested structure
+    const rows = approvalData.approvalData?.rows || approvalData.rows || [];
+
+    // Transform each row to match frontend expectations
+    const generatedContent = rows.map((row: any, index: number) => ({
+      row: row.row || index + 1,
+      name: row.name || row.customer_name || 'Unknown',
+      product: row.product || row.product_name || 'Unknown',
+      message: row.generated_content || row.message || '',
+      complianceScore: row.compliance_risk_score || row.complianceScore || 0,
+      complianceStatus: this.mapComplianceStatus(row.compliance_status || row.complianceStatus),
+      violations: row.violations || row.flagged_terms || [],
+    }));
+
+    return {
+      generatedContent,
+      metadata: approvalData.approvalData?.metadata || approvalData.metadata,
+    };
+  }
+
+  /**
+   * Map compliance status from backend format to frontend format
+   */
+  private mapComplianceStatus(status: string): 'pass' | 'warning' | 'fail' {
+    if (!status) return 'warning';
+
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus === 'passed' || lowerStatus === 'pass') return 'pass';
+    if (lowerStatus === 'failed' || lowerStatus === 'fail') return 'fail';
+    return 'warning';
   }
 
   /**
@@ -168,7 +214,7 @@ export class PublicApiService {
     executionId: string,
     workflowId: string,
     userId: string,
-    comment?: string,
+    comment?: string
   ) {
     const execution = await this.prisma.workflowExecution.findFirst({
       where: {
@@ -211,12 +257,7 @@ export class PublicApiService {
   /**
    * Reject execution
    */
-  async rejectExecution(
-    executionId: string,
-    workflowId: string,
-    userId: string,
-    comment?: string,
-  ) {
+  async rejectExecution(executionId: string, workflowId: string, userId: string, comment?: string) {
     const execution = await this.prisma.workflowExecution.findFirst({
       where: {
         id: executionId,
@@ -268,9 +309,7 @@ export class PublicApiService {
 
     // Check if input has csvData array
     if (Array.isArray(input.csvData) && input.csvData.length > 100) {
-      console.log(
-        `[PublicAPI] Truncating CSV data from ${input.csvData.length} rows to 100 rows`,
-      );
+      console.log(`[PublicAPI] Truncating CSV data from ${input.csvData.length} rows to 100 rows`);
       return {
         ...input,
         csvData: input.csvData.slice(0, 100),

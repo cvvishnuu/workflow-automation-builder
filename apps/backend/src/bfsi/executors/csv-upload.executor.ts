@@ -37,9 +37,7 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
     const inputData = context.input as any;
 
     const fileUploadId =
-      config.fileUploadId ||
-      previousOutput?.fileUploadId ||
-      inputData?.fileUploadId;
+      config.fileUploadId || previousOutput?.fileUploadId || inputData?.fileUploadId;
 
     if (!fileUploadId) {
       // Check if inline CSV data is provided in the input
@@ -51,8 +49,8 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
 
         try {
           let processedRows = csvData;
-          let anonymizationMapping: Record<string, string> = {};
-          let detectedPII: any[] = [];
+          const anonymizationMapping: Record<string, string> = {};
+          const detectedPII: any[] = [];
 
           // Extract columns from first row
           const columns = Object.keys(csvData[0]);
@@ -74,10 +72,7 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
 
             for (let i = 0; i < csvData.length; i += batchSize) {
               const batch = csvData.slice(i, i + batchSize);
-              const result = this.anonymizationService.anonymizeBatch(
-                batch,
-                anonymizationOptions
-              );
+              const result = this.anonymizationService.anonymizeBatch(batch, anonymizationOptions);
 
               anonymizedBatches.push(...result.anonymizedData);
               detectedPII.push(...result.allDetectedPII);
@@ -123,23 +118,20 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
 
       try {
         // Auto-upload the test CSV file by reading it and creating a Multer-like object
-        const testFilePath = '/tmp/millennials_homeloan_campaign.csv';
-        const fs = require('fs/promises');
-        const fileBuffer = await fs.readFile(testFilePath);
+        const testFilePath = '/tmp/test_customers.csv';
+        const { readFile } = await import('fs/promises');
+        const fileBuffer = await readFile(testFilePath);
 
         const multerFile = {
           fieldname: 'file',
-          originalname: 'millennials_homeloan_campaign.csv',
+          originalname: 'test_customers.csv',
           encoding: '7bit',
           mimetype: 'text/csv',
           buffer: fileBuffer,
           size: fileBuffer.length,
         } as any;
 
-        const uploadedFile = await this.fileUploadService.uploadFile(
-          context.userId,
-          multerFile
-        );
+        const uploadedFile = await this.fileUploadService.uploadFile(context.userId, multerFile);
 
         console.log(`[CSV Upload] Auto-uploaded test file: ${uploadedFile.id}`);
         return await this.processCSV(uploadedFile.id, context.userId, config);
@@ -159,17 +151,13 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
     userId: string,
     config: CSVUploadNodeConfig['config']
   ): Promise<NodeExecutionResult> {
-
     try {
       // Retrieve and parse CSV data
-      const csvData = await this.fileUploadService.getParsedCSVData(
-        fileUploadId,
-        userId
-      );
+      const csvData = await this.fileUploadService.getParsedCSVData(fileUploadId, userId);
 
       let processedRows = csvData.rows;
-      let anonymizationMapping: Record<string, string> = {};
-      let detectedPII: any[] = [];
+      const anonymizationMapping: Record<string, string> = {};
+      const detectedPII: any[] = [];
 
       // Apply anonymization if enabled
       if (config.anonymizeData !== false) {
@@ -190,10 +178,7 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
 
         for (let i = 0; i < csvData.rows.length; i += batchSize) {
           const batch = csvData.rows.slice(i, i + batchSize);
-          const result = this.anonymizationService.anonymizeBatch(
-            batch,
-            anonymizationOptions
-          );
+          const result = this.anonymizationService.anonymizeBatch(batch, anonymizationOptions);
 
           anonymizedBatches.push(...result.anonymizedData);
           detectedPII.push(...result.allDetectedPII);
@@ -217,9 +202,7 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
           piiDetails: detectedPII.slice(0, 10), // Include first 10 for inspection
           // Store mapping for potential de-anonymization (handle securely!)
           anonymizationMapping:
-            Object.keys(anonymizationMapping).length > 0
-              ? '[REDACTED - Stored securely]'
-              : null,
+            Object.keys(anonymizationMapping).length > 0 ? '[REDACTED - Stored securely]' : null,
         },
       };
     } catch (error) {
@@ -230,10 +213,8 @@ export class CSVUploadNodeExecutor extends BaseNodeExecutor {
     }
   }
 
- validate(node: NodeConfig): boolean {
+  validate(node: NodeConfig): boolean {
     super.validate(node);
-
-    const config = (node as CSVUploadNodeConfig).config;
 
     // Validation is relaxed since fileUploadId can come from runtime input
     // Additional validation can be added here if needed
