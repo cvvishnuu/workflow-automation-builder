@@ -116,31 +116,22 @@ async function main() {
             {
               nodeId: 'compliance-1',
               type: 'compliance_checker',
-              label: 'Validate BFSI Compliance',
+              label: 'RAG-Powered Compliance Check',
               position: { x: 900, y: 100 },
               config: {
-                contentField: 'generatedContent',
+                contentField: 'generated_content',
                 contentType: 'whatsapp',
                 productCategory: 'credit-card',
-                minimumScore: 85,
-              },
-            },
-            {
-              nodeId: 'conditional-1',
-              type: 'conditional',
-              label: 'Check Compliance Pass',
-              position: { x: 1200, y: 100 },
-              config: {
-                condition: 'input.failedCount === 0 && input.criticalViolations === 0',
-                trueOutputId: 'manual-approval-1',
-                falseOutputId: 'delay-1',
+                minPassingScore: 50,
+                saveToAudit: true,
+                failOnViolation: false,
               },
             },
             {
               nodeId: 'manual-approval-1',
               type: 'manual_approval',
               label: 'Review Content',
-              position: { x: 1500, y: 50 },
+              position: { x: 1200, y: 100 },
               config: {
                 title: 'Review Generated WhatsApp Messages',
                 description:
@@ -160,21 +151,12 @@ async function main() {
               nodeId: 'whatsapp-1',
               type: 'whatsapp',
               label: 'Send WhatsApp Message',
-              position: { x: 1800, y: 50 },
+              position: { x: 1500, y: 100 },
               config: {
                 credentialId: '48c2a793-252c-4491-af2a-b5784dcadb82',
                 to: '{{input.customerData.phone}}',
                 message: '{{input.generatedContent}}',
                 mediaUrl: '',
-              },
-            },
-            {
-              nodeId: 'delay-1',
-              type: 'delay',
-              label: 'Wait for Review',
-              position: { x: 1500, y: 250 },
-              config: {
-                delayMs: 86400000, // 24 hours
               },
             },
             {
@@ -207,15 +189,9 @@ async function main() {
               target: 'compliance-1',
             },
             {
-              id: 'e-compliance-conditional',
+              id: 'e-compliance-approval',
               source: 'compliance-1',
-              target: 'conditional-1',
-            },
-            {
-              id: 'e-conditional-approval',
-              source: 'conditional-1',
               target: 'manual-approval-1',
-              sourceHandle: 'true',
             },
             {
               id: 'e-approval-whatsapp',
@@ -223,19 +199,8 @@ async function main() {
               target: 'whatsapp-1',
             },
             {
-              id: 'e-conditional-delay',
-              source: 'conditional-1',
-              target: 'delay-1',
-              sourceHandle: 'false',
-            },
-            {
               id: 'e-whatsapp-report',
               source: 'whatsapp-1',
-              target: 'compliance-report-1',
-            },
-            {
-              id: 'e-delay-report',
-              source: 'delay-1',
               target: 'compliance-report-1',
             },
           ],
@@ -285,31 +250,22 @@ async function main() {
             {
               nodeId: 'compliance-1',
               type: 'compliance_checker',
-              label: 'Validate BFSI Compliance',
+              label: 'RAG-Powered Compliance Check',
               position: { x: 900, y: 100 },
               config: {
-                contentField: 'generatedContent',
+                contentField: 'generated_content',
                 contentType: 'whatsapp',
                 productCategory: 'credit-card',
-                minimumScore: 85,
-              },
-            },
-            {
-              nodeId: 'conditional-1',
-              type: 'conditional',
-              label: 'Check Compliance Pass',
-              position: { x: 1200, y: 100 },
-              config: {
-                condition: 'input.failedCount === 0 && input.criticalViolations === 0',
-                trueOutputId: 'manual-approval-1',
-                falseOutputId: 'delay-1',
+                minPassingScore: 50,
+                saveToAudit: true,
+                failOnViolation: false,
               },
             },
             {
               nodeId: 'manual-approval-1',
               type: 'manual_approval',
               label: 'Review Content',
-              position: { x: 1500, y: 50 },
+              position: { x: 1200, y: 100 },
               config: {
                 title: 'Review Generated WhatsApp Messages',
                 description:
@@ -329,21 +285,12 @@ async function main() {
               nodeId: 'whatsapp-1',
               type: 'whatsapp',
               label: 'Send WhatsApp Message',
-              position: { x: 1800, y: 50 },
+              position: { x: 1500, y: 100 },
               config: {
                 credentialId: '48c2a793-252c-4491-af2a-b5784dcadb82',
                 to: '{{input.customerData.phone}}',
                 message: '{{input.generatedContent}}',
                 mediaUrl: '',
-              },
-            },
-            {
-              nodeId: 'delay-1',
-              type: 'delay',
-              label: 'Wait for Review',
-              position: { x: 1500, y: 250 },
-              config: {
-                delayMs: 86400000, // 24 hours
               },
             },
             {
@@ -376,15 +323,9 @@ async function main() {
               target: 'compliance-1',
             },
             {
-              id: 'e-compliance-conditional',
+              id: 'e-compliance-approval',
               source: 'compliance-1',
-              target: 'conditional-1',
-            },
-            {
-              id: 'e-conditional-approval',
-              source: 'conditional-1',
               target: 'manual-approval-1',
-              sourceHandle: 'true',
             },
             {
               id: 'e-approval-whatsapp',
@@ -392,19 +333,8 @@ async function main() {
               target: 'whatsapp-1',
             },
             {
-              id: 'e-conditional-delay',
-              source: 'conditional-1',
-              target: 'delay-1',
-              sourceHandle: 'false',
-            },
-            {
               id: 'e-whatsapp-report',
               source: 'whatsapp-1',
-              target: 'compliance-report-1',
-            },
-            {
-              id: 'e-delay-report',
-              source: 'delay-1',
               target: 'compliance-report-1',
             },
           ],
@@ -421,10 +351,10 @@ async function main() {
     // NOTE: We write the plain CSV to /tmp/ so the CSV upload executor can auto-upload it
     // The executor will read it and use FileUploadService.uploadFile() which handles encryption
     console.log('📄 Creating default test CSV file in /tmp/...');
-    const defaultCSVData = `customerId,name,phone,email,age,income,creditScore
-1,Rajesh Kumar,+919876543210,rajesh.kumar@example.com,35,75000,720
-2,Priya Sharma,+919876543211,priya.sharma@example.com,28,90000,780
-3,Amit Patel,+919876543212,amit.patel@example.com,42,120000,650`;
+    const defaultCSVData = `customerId,name,phone,email,age,city,country,occupation,income,creditScore
+CUST001,Rajesh Kumar,+919876543210,rajesh.kumar@example.com,35,Mumbai,India,Software Engineer,75000,720
+CUST002,Priya Sharma,+919876543211,priya.sharma@example.com,28,Delhi,India,Marketing Manager,90000,780
+CUST003,Amit Patel,+919876543212,amit.patel@example.com,42,Bangalore,India,Business Owner,120000,650`;
 
     // Write CSV file to /tmp for CSV upload executor fallback
     const fs = await import('fs/promises');

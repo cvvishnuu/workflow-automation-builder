@@ -18,6 +18,7 @@ import { BfsiModule } from './bfsi/bfsi.module';
 import { PublicApiModule } from './public-api/public-api.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { HealthModule } from './health/health.module';
+import { ComplianceRAGModule } from './compliance-rag/compliance-rag.module';
 
 @Module({
   imports: [
@@ -32,6 +33,9 @@ import { HealthModule } from './health/health.module';
 
     // Health check module
     HealthModule,
+
+    // Compliance RAG module (global - for AI-powered compliance checking)
+    ComplianceRAGModule,
 
     // Users module (global - must be loaded before Auth)
     UsersModule,

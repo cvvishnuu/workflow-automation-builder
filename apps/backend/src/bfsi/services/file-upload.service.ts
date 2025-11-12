@@ -62,10 +62,7 @@ export class FileUploadService {
   /**
    * Upload and encrypt a CSV file
    */
-  async uploadFile(
-    userId: string,
-    file: MulterFile
-  ): Promise<FileUploadResult> {
+  async uploadFile(userId: string, file: MulterFile): Promise<FileUploadResult> {
     // Validate file
     this.validateFile(file);
 
@@ -144,9 +141,7 @@ export class FileUploadService {
         createdAt: fileUpload.createdAt,
       };
     } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to upload file: ${error.message}`
-      );
+      throw new InternalServerErrorException(`Failed to upload file: ${error.message}`);
     }
   }
 
@@ -181,9 +176,7 @@ export class FileUploadService {
 
       return decryptedData;
     } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to retrieve file: ${error.message}`
-      );
+      throw new InternalServerErrorException(`Failed to retrieve file: ${error.message}`);
     }
   }
 
@@ -222,9 +215,7 @@ export class FileUploadService {
         where: { id: fileId },
       });
     } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to delete file: ${error.message}`
-      );
+      throw new InternalServerErrorException(`Failed to delete file: ${error.message}`);
     }
   }
 
@@ -287,11 +278,7 @@ export class FileUploadService {
         skipEmptyLines: true,
         complete: (results) => {
           if (results.errors.length > 0) {
-            reject(
-              new BadRequestException(
-                `CSV parsing error: ${results.errors[0].message}`
-              )
-            );
+            reject(new BadRequestException(`CSV parsing error: ${results.errors[0].message}`));
             return;
           }
 
@@ -305,6 +292,32 @@ export class FileUploadService {
 
           if (columns.length === 0) {
             reject(new BadRequestException('CSV file has no columns'));
+            return;
+          }
+
+          // Validate required columns for BFSI campaign
+          const requiredColumns = [
+            'customerId',
+            'name',
+            'age',
+            'phone',
+            'email',
+            'city',
+            'country',
+            'occupation',
+          ];
+          const columnsLower = columns.map((col) => col.toLowerCase());
+          const missingColumns = requiredColumns.filter(
+            (reqCol) => !columnsLower.includes(reqCol.toLowerCase())
+          );
+
+          if (missingColumns.length > 0) {
+            reject(
+              new BadRequestException(
+                `Missing required columns: ${missingColumns.join(', ')}. ` +
+                  `Required columns: customerId, name, age, phone, email, city, country, occupation`
+              )
+            );
             return;
           }
 
@@ -336,11 +349,7 @@ export class FileUploadService {
     const encryptionKey = this.getEncryptionKey();
     const iv = crypto.randomBytes(16); // 16 bytes IV for GCM
 
-    const cipher = crypto.createCipheriv(
-      this.ENCRYPTION_ALGORITHM,
-      encryptionKey,
-      iv
-    );
+    const cipher = crypto.createCipheriv(this.ENCRYPTION_ALGORITHM, encryptionKey, iv);
 
     const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
     const authTag = cipher.getAuthTag();
@@ -361,11 +370,7 @@ export class FileUploadService {
     const authTag = encryptedData.slice(-16);
     const encrypted = encryptedData.slice(0, -16);
 
-    const decipher = crypto.createDecipheriv(
-      this.ENCRYPTION_ALGORITHM,
-      encryptionKey,
-      iv
-    );
+    const decipher = crypto.createDecipheriv(this.ENCRYPTION_ALGORITHM, encryptionKey, iv);
     decipher.setAuthTag(authTag);
 
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
@@ -380,9 +385,7 @@ export class FileUploadService {
     const key = process.env.FILE_ENCRYPTION_KEY;
 
     if (!key) {
-      throw new InternalServerErrorException(
-        'FILE_ENCRYPTION_KEY not configured'
-      );
+      throw new InternalServerErrorException('FILE_ENCRYPTION_KEY not configured');
     }
 
     // Ensure key is exactly 32 bytes

@@ -29,6 +29,9 @@ import { ComplianceReportNodeExecutor } from './executors/compliance-report.exec
 // Prisma
 import { PrismaModule } from '../prisma/prisma.module';
 
+// Compliance RAG
+import { ComplianceRAGModule } from '../compliance-rag/compliance-rag.module';
+
 // Controller
 import { BfsiController } from './bfsi.controller';
 
@@ -36,6 +39,7 @@ import { BfsiController } from './bfsi.controller';
   imports: [
     ConfigModule, // For environment variables
     PrismaModule, // For database access
+    ComplianceRAGModule, // For AI-powered compliance checking
   ],
   controllers: [BfsiController],
   providers: [

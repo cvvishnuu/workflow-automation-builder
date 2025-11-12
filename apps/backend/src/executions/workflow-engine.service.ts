@@ -43,7 +43,9 @@ export class WorkflowEngineService {
     userId: string;
     input?: unknown;
   }) {
-    console.log(`[Workflow Engine] Received execution.start event for execution ${payload.executionId}`);
+    console.log(
+      `[Workflow Engine] Received execution.start event for execution ${payload.executionId}`
+    );
 
     try {
       // Load the execution from database
@@ -57,7 +59,9 @@ export class WorkflowEngineService {
       }
 
       if (execution.status !== 'pending') {
-        console.log(`[Workflow Engine] Execution ${payload.executionId} is not pending (status: ${execution.status}), skipping`);
+        console.log(
+          `[Workflow Engine] Execution ${payload.executionId} is not pending (status: ${execution.status}), skipping`
+        );
         return;
       }
 
@@ -71,18 +75,21 @@ export class WorkflowEngineService {
       const definition = execution.workflowSnapshot as any as WorkflowDefinition;
 
       // Start workflow execution asynchronously
-      this.runWorkflow(
-        payload.executionId,
-        definition,
-        payload.userId,
-        payload.input
-      ).catch((error) => {
-        console.error(`[Workflow Engine] Workflow execution ${payload.executionId} failed:`, error);
-      });
+      this.runWorkflow(payload.executionId, definition, payload.userId, payload.input).catch(
+        (error) => {
+          console.error(
+            `[Workflow Engine] Workflow execution ${payload.executionId} failed:`,
+            error
+          );
+        }
+      );
 
       console.log(`[Workflow Engine] Started workflow execution ${payload.executionId}`);
     } catch (error) {
-      console.error(`[Workflow Engine] Error handling execution.start for ${payload.executionId}:`, error);
+      console.error(
+        `[Workflow Engine] Error handling execution.start for ${payload.executionId}:`,
+        error
+      );
     }
   }
 
@@ -280,15 +287,16 @@ export class WorkflowEngineService {
 
             // Get input from previous node(s)
             const dependencies = reverseAdjacencyList.get(nodeId) || [];
-            const previousOutput = dependencies.length > 0
-              ? nodeOutputs.get(dependencies[0])
-              : nodeOutputs.get(triggerNode.nodeId);
+            const previousOutput =
+              dependencies.length > 0
+                ? nodeOutputs.get(dependencies[0])
+                : nodeOutputs.get(triggerNode.nodeId);
 
-            // Update context
+            // Update context - preserve original input, only update previousNodeOutput
             const nodeContext = {
               ...context,
               previousNodeOutput: previousOutput,
-              input: previousOutput,
+              // Keep original input unchanged so nodes can access execution parameters
             };
 
             // Execute node with retry logic
@@ -347,7 +355,9 @@ export class WorkflowEngineService {
               timestamp: new Date(),
             });
 
-            console.log(`[Workflow Engine] Execution ${executionId} paused for approval at node ${nodeId}`);
+            console.log(
+              `[Workflow Engine] Execution ${executionId} paused for approval at node ${nodeId}`
+            );
 
             // Clean up and exit - workflow will resume when approved
             this.runningExecutions.delete(executionId);
@@ -709,13 +719,18 @@ export class WorkflowEngineService {
       }
 
       if (execution.status !== 'pending_approval') {
-        console.log(`[Workflow Engine] Execution ${payload.executionId} already processed (status: ${execution.status}), skipping`);
+        console.log(
+          `[Workflow Engine] Execution ${payload.executionId} already processed (status: ${execution.status}), skipping`
+        );
         return;
       }
 
       await this.resumeExecution(payload.executionId, payload.userId, true, payload.comment);
     } catch (error) {
-      console.error(`[Workflow Engine] Error handling execution.approved for ${payload.executionId}:`, error);
+      console.error(
+        `[Workflow Engine] Error handling execution.approved for ${payload.executionId}:`,
+        error
+      );
     }
   }
 
@@ -732,7 +747,9 @@ export class WorkflowEngineService {
     approved: boolean,
     comment?: string
   ): Promise<void> {
-    console.log(`[Workflow Engine] resumeExecution called for ${executionId}, approved=${approved}`);
+    console.log(
+      `[Workflow Engine] resumeExecution called for ${executionId}, approved=${approved}`
+    );
 
     // Load the paused execution
     const execution = await this.prisma.workflowExecution.findUnique({
@@ -756,7 +773,9 @@ export class WorkflowEngineService {
     });
 
     if (execution.status !== 'pending_approval') {
-      console.error(`[Workflow Engine] Execution is not pending approval, status is: ${execution.status}`);
+      console.error(
+        `[Workflow Engine] Execution is not pending approval, status is: ${execution.status}`
+      );
       throw new Error('Execution is not pending approval');
     }
 
@@ -795,7 +814,9 @@ export class WorkflowEngineService {
     }
 
     // Approval - resume workflow execution
-    console.log(`[Workflow Engine] Execution ${executionId} approved by user ${userId}, resuming...`);
+    console.log(
+      `[Workflow Engine] Execution ${executionId} approved by user ${userId}, resuming...`
+    );
 
     // Update status to running
     await this.prisma.workflowExecution.update({
@@ -824,15 +845,20 @@ export class WorkflowEngineService {
 
     if (!manualApprovalNodeExecution) {
       console.error(`[Workflow Engine] Manual approval node execution not found!`);
-      console.error(`[Workflow Engine] Available node executions:`, execution.nodeExecutions.map(ne => ({
-        nodeId: ne.nodeId,
-        nodeType: ne.nodeType,
-        status: ne.status
-      })));
+      console.error(
+        `[Workflow Engine] Available node executions:`,
+        execution.nodeExecutions.map((ne) => ({
+          nodeId: ne.nodeId,
+          nodeType: ne.nodeType,
+          status: ne.status,
+        }))
+      );
       throw new Error('Manual approval node execution not found');
     }
 
-    console.log(`[Workflow Engine] Found manual approval node: ${manualApprovalNodeExecution.nodeId}`);
+    console.log(
+      `[Workflow Engine] Found manual approval node: ${manualApprovalNodeExecution.nodeId}`
+    );
 
     // Get the approved data (this will be passed to next nodes)
     const approvedData = execution.approvalData;
@@ -863,7 +889,9 @@ export class WorkflowEngineService {
     fromNodeId: string,
     inputData: unknown
   ): Promise<void> {
-    console.log(`[Workflow Engine] resumeFromNode called for execution ${executionId}, from node ${fromNodeId}`);
+    console.log(
+      `[Workflow Engine] resumeFromNode called for execution ${executionId}, from node ${fromNodeId}`
+    );
 
     // Mark execution as running
     this.runningExecutions.set(executionId, true);
@@ -889,14 +917,20 @@ export class WorkflowEngineService {
         reverseAdjacencyList.get(edge.target)!.push(edge.source);
       });
 
-      // Create execution context
+      // Load execution to get original input
+      const execution = await this.prisma.workflowExecution.findUnique({
+        where: { id: executionId },
+        select: { input: true },
+      });
+
+      // Create execution context - preserve original input!
       const context: ExecutionContext = {
         executionId,
         workflowId,
         userId,
         variables: definition.variables || {},
-        previousNodeOutput: inputData,
-        input: inputData,
+        previousNodeOutput: inputData, // Approved data from manual approval node
+        input: execution?.input || inputData, // Original execution input (csvData, prompt, tone)
       };
 
       // Get already executed nodes from database
@@ -915,7 +949,9 @@ export class WorkflowEngineService {
       nodeOutputs.set(fromNodeId, inputData);
 
       // Execute remaining nodes
-      console.log(`[Workflow Engine] Starting execution loop with ${processingQueue.length} nodes in queue`);
+      console.log(
+        `[Workflow Engine] Starting execution loop with ${processingQueue.length} nodes in queue`
+      );
       while (processingQueue.length > 0) {
         // Check if execution was cancelled
         if (!this.runningExecutions.get(executionId)) {
@@ -928,7 +964,9 @@ export class WorkflowEngineService {
           return dependencies.every((dep) => executedNodes.has(dep));
         });
 
-        console.log(`[Workflow Engine] Ready nodes: ${readyNodes.length}, Queue: ${processingQueue.length}`);
+        console.log(
+          `[Workflow Engine] Ready nodes: ${readyNodes.length}, Queue: ${processingQueue.length}`
+        );
 
         if (readyNodes.length === 0) {
           console.log(`[Workflow Engine] No ready nodes, breaking out of loop`);
@@ -953,15 +991,14 @@ export class WorkflowEngineService {
 
             // Get input from previous node(s)
             const dependencies = reverseAdjacencyList.get(nodeId) || [];
-            const previousOutput = dependencies.length > 0
-              ? nodeOutputs.get(dependencies[0])
-              : inputData;
+            const previousOutput =
+              dependencies.length > 0 ? nodeOutputs.get(dependencies[0]) : inputData;
 
-            // Update context
+            // Update context - preserve original input, only update previousNodeOutput
             const nodeContext = {
               ...context,
               previousNodeOutput: previousOutput,
-              input: previousOutput,
+              // Keep original input unchanged so nodes can access execution parameters
             };
 
             // Execute node with retry logic

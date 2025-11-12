@@ -20,7 +20,8 @@ export interface ExecutionContext {
   userId: string;
   variables: Record<string, unknown>; // Global workflow variables
   previousNodeOutput?: unknown; // Output from the previous node
-  input?: any; // Input data from previous nodes (for BFSI workflows)
+  input?: any; // Original execution input (preserved throughout workflow)
+  executionInput?: any; // Alias for input (for backwards compatibility)
 }
 
 /**

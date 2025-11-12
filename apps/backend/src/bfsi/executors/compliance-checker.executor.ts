@@ -16,12 +16,14 @@ import {
 import { ComplianceCheckerNodeConfig, NodeConfig } from '@workflow/shared-types';
 import { ComplianceService } from '../services/compliance.service';
 import { AuditService } from '../services/audit.service';
+import { ComplianceRAGService } from '../../compliance-rag/compliance-rag.service';
 
 @Injectable()
 export class ComplianceCheckerNodeExecutor extends BaseNodeExecutor {
   constructor(
     private readonly complianceService: ComplianceService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly complianceRAGService: ComplianceRAGService
   ) {
     super();
   }
@@ -107,8 +109,8 @@ export class ComplianceCheckerNodeExecutor extends BaseNodeExecutor {
             content = foundContent;
           }
 
-          // Perform compliance check
-          const complianceResult = this.complianceService.checkCompliance({
+          // Perform compliance check using RAG (falls back to basic check if Gemini not configured)
+          const complianceResult = await this.complianceRAGService.checkComplianceWithRAG({
             content,
             contentType: config.contentType,
             productCategory: config.productCategory,
@@ -128,8 +130,7 @@ export class ComplianceCheckerNodeExecutor extends BaseNodeExecutor {
 
           // Determine if row passes based on minPassingScore
           const minScore = config.minPassingScore || 50;
-          const passes =
-            complianceResult.isPassed && complianceResult.riskScore < minScore;
+          const passes = complianceResult.isPassed && complianceResult.riskScore < minScore;
 
           if (passes) {
             passedCount++;
@@ -140,9 +141,7 @@ export class ComplianceCheckerNodeExecutor extends BaseNodeExecutor {
           totalRiskScore += complianceResult.riskScore;
 
           // Count critical violations
-          const hasCritical = complianceResult.flaggedTerms.some(
-            (t) => t.severity === 'critical'
-          );
+          const hasCritical = complianceResult.flaggedTerms.some((t) => t.severity === 'critical');
           if (hasCritical) {
             criticalViolations++;
           }
@@ -172,9 +171,7 @@ export class ComplianceCheckerNodeExecutor extends BaseNodeExecutor {
       }
 
       const averageRiskScore =
-        inputRows.length > 0
-          ? Math.round(totalRiskScore / inputRows.length)
-          : 0;
+        inputRows.length > 0 ? Math.round(totalRiskScore / inputRows.length) : 0;
 
       // Check if we should fail the workflow
       const shouldFailWorkflow =
@@ -202,15 +199,10 @@ export class ComplianceCheckerNodeExecutor extends BaseNodeExecutor {
           checkedCount: inputRows.length,
           passedCount,
           failedCount,
-          passRate:
-            inputRows.length > 0
-              ? Math.round((passedCount / inputRows.length) * 100)
-              : 0,
+          passRate: inputRows.length > 0 ? Math.round((passedCount / inputRows.length) * 100) : 0,
           averageRiskScore,
           criticalViolations,
-          complianceGuidelines: this.complianceService.getComplianceGuidelines(
-            config.contentType
-          ),
+          complianceGuidelines: this.complianceService.getComplianceGuidelines(config.contentType),
         },
       };
     } catch (error) {

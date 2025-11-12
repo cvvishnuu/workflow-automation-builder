@@ -178,22 +178,94 @@ export class PublicApiService {
     // Extract rows from nested structure
     const rows = approvalData.approvalData?.rows || approvalData.rows || [];
 
+    // Extract product from prompt (stored in approvalData.executionInput from manual approval node)
+    const prompt = approvalData.executionInput?.prompt || approvalData.prompt || '';
+    const product = this.extractProductFromPrompt(prompt);
+
     // Transform each row to match frontend expectations
-    const generatedContent = rows.map((row: any, index: number) => ({
-      row: row.row || index + 1,
-      name: row.name || row.customer_name || 'Unknown',
-      product: row.product || row.product_name || 'Unknown',
-      message: row.generated_content || row.message || '',
-      // Convert risk score to compliance score (risk score: lower is better, compliance score: higher is better)
-      complianceScore: 100 - (row.compliance_risk_score || row.complianceScore || 0),
-      complianceStatus: this.mapComplianceStatus(row.compliance_status || row.complianceStatus),
-      violations: row.violations || row.flagged_terms || [],
-    }));
+    const generatedContent = rows.map((row: any, index: number) => {
+      // Extract violations with full details (term, reason, severity, suggestion)
+      const flaggedTerms =
+        row.compliance_flagged_terms || row.violations || row.flagged_terms || [];
+      const violations = flaggedTerms.map((term: any) => {
+        // If it's already a string, return it
+        if (typeof term === 'string') return term;
+        // Otherwise, format it with details
+        const parts = [];
+        if (term.term) parts.push(`"${term.term}"`);
+        if (term.reason) parts.push(term.reason);
+        if (term.severity) parts.push(`(${term.severity})`);
+        return parts.join(' - ');
+      });
+
+      // Add compliance suggestions as additional violations
+      const suggestions = row.compliance_suggestions || [];
+      if (suggestions.length > 0) {
+        violations.push(...suggestions.map((s: string) => `Suggestion: ${s}`));
+      }
+
+      return {
+        row: row.row || index + 1,
+        name: row.name || row.customer_name || 'Unknown',
+        product: row.product || row.product_name || product,
+        message: row.generated_content || row.message || '',
+        // Convert risk score to compliance score (risk score: lower is better, compliance score: higher is better)
+        complianceScore: 100 - (row.compliance_risk_score || row.complianceScore || 0),
+        complianceStatus: this.mapComplianceStatus(row.compliance_status || row.complianceStatus),
+        violations,
+      };
+    });
 
     return {
       generatedContent,
       metadata: approvalData.approvalData?.metadata || approvalData.metadata,
     };
+  }
+
+  /**
+   * Extract product name from prompt text
+   */
+  private extractProductFromPrompt(prompt: string): string {
+    if (!prompt) return 'Unknown';
+
+    const lowerPrompt = prompt.toLowerCase();
+
+    // Common BFSI products
+    if (lowerPrompt.includes('home loan') || lowerPrompt.includes('housing loan'))
+      return 'Home Loan';
+    if (lowerPrompt.includes('personal loan')) return 'Personal Loan';
+    if (
+      lowerPrompt.includes('car loan') ||
+      lowerPrompt.includes('auto loan') ||
+      lowerPrompt.includes('vehicle loan')
+    )
+      return 'Car Loan';
+    if (lowerPrompt.includes('credit card')) return 'Credit Card';
+    if (lowerPrompt.includes('debit card')) return 'Debit Card';
+    if (lowerPrompt.includes('savings account') || lowerPrompt.includes('saving account'))
+      return 'Savings Account';
+    if (lowerPrompt.includes('current account')) return 'Current Account';
+    if (lowerPrompt.includes('fixed deposit') || lowerPrompt.includes('fd')) return 'Fixed Deposit';
+    if (lowerPrompt.includes('recurring deposit') || lowerPrompt.includes('rd'))
+      return 'Recurring Deposit';
+    if (
+      lowerPrompt.includes('mutual fund') ||
+      lowerPrompt.includes('sip') ||
+      lowerPrompt.includes('systematic investment')
+    )
+      return 'Mutual Fund / SIP';
+    if (lowerPrompt.includes('life insurance')) return 'Life Insurance';
+    if (lowerPrompt.includes('health insurance') || lowerPrompt.includes('medical insurance'))
+      return 'Health Insurance';
+    if (lowerPrompt.includes('term insurance')) return 'Term Insurance';
+    if (lowerPrompt.includes('investment') && lowerPrompt.includes('plan'))
+      return 'Investment Plan';
+    if (lowerPrompt.includes('gold loan')) return 'Gold Loan';
+    if (lowerPrompt.includes('education loan') || lowerPrompt.includes('student loan'))
+      return 'Education Loan';
+    if (lowerPrompt.includes('business loan')) return 'Business Loan';
+
+    return 'Financial Product';
   }
 
   /**

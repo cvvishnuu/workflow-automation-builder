@@ -22,7 +22,8 @@ export class ManualApprovalNodeExecutor extends BaseNodeExecutor {
 
     try {
       const { config } = approvalNode;
-      const inputData = context.input as any;
+      // Get data from previous node output (not from original input)
+      const inputData = context.previousNodeOutput as any;
 
       // Extract the data that needs approval
       // Typically this will be rows with generated content and customer data
@@ -31,7 +32,8 @@ export class ManualApprovalNodeExecutor extends BaseNodeExecutor {
         metadata: {
           totalRows: inputData.rows?.length || 0,
           title: config.title || 'Content Approval Required',
-          description: config.description || 'Please review the generated content before proceeding',
+          description:
+            config.description || 'Please review the generated content before proceeding',
           allowBulkApproval: config.allowBulkApproval !== false,
           requireComment: config.requireComment || false,
         },
@@ -53,9 +55,11 @@ export class ManualApprovalNodeExecutor extends BaseNodeExecutor {
       return {
         success: true,
         output: {
-          ...inputData, // Pass through input data
+          ...inputData, // Pass through previous node output (rows with generated content)
           approvalPending: true,
           approvalData: dataToReview,
+          // Also include original execution input for context
+          executionInput: context.input,
         },
         requiresApproval: true, // This flag tells the engine to pause execution
       };

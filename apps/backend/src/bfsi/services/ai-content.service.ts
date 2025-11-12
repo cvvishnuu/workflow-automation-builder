@@ -40,7 +40,8 @@ export class AIContentService {
   private readonly AI_PROVIDER: 'openai' | 'gemini';
 
   private readonly OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-  private readonly GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  private readonly GEMINI_API_URL =
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
   private readonly OPENAI_MODEL = 'gpt-4o-mini';
   private readonly GEMINI_MODEL = 'gemini-2.5-flash'; // Free tier available
@@ -57,9 +58,7 @@ export class AIContentService {
   /**
    * Generate marketing content using AI
    */
-  async generateContent(
-    request: ContentGenerationRequest
-  ): Promise<ContentGenerationResult> {
+  async generateContent(request: ContentGenerationRequest): Promise<ContentGenerationResult> {
     // Check if API key is configured
     if (this.AI_PROVIDER === 'gemini' && !this.GEMINI_API_KEY) {
       throw new InternalServerErrorException('GEMINI_API_KEY not configured');
@@ -105,7 +104,7 @@ export class AIContentService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${this.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: this.OPENAI_MODEL,
@@ -197,7 +196,10 @@ export class AIContentService {
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
     if (!content) {
-      console.error('[Gemini API] No content in response. Full data:', JSON.stringify(data, null, 2));
+      console.error(
+        '[Gemini API] No content in response. Full data:',
+        JSON.stringify(data, null, 2)
+      );
 
       // Check if content was blocked
       if (data.candidates?.[0]?.finishReason === 'SAFETY') {
@@ -210,12 +212,7 @@ export class AIContentService {
     // Estimate tokens (Gemini doesn't always return token count)
     const estimatedTokens = Math.ceil(content.length / 4);
 
-    return this.processGeneratedContent(
-      content,
-      request,
-      estimatedTokens,
-      this.GEMINI_MODEL
-    );
+    return this.processGeneratedContent(content, request, estimatedTokens, this.GEMINI_MODEL);
   }
 
   /**
@@ -227,19 +224,10 @@ export class AIContentService {
     tokens: number,
     model: string
   ): ContentGenerationResult {
-    // Replace variables if provided
-    let finalContent = content;
-    if (request.variables) {
-      for (const [key, value] of Object.entries(request.variables)) {
-        finalContent = finalContent.replace(
-          new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-          value
-        );
-      }
-    }
-
+    // AI should have already personalized the content with customer data
+    // No need for variable replacement since we provided actual values in the prompt
     return {
-      content: finalContent,
+      content: content,
       contentType: request.contentType,
       tokens,
       model,
@@ -250,9 +238,7 @@ export class AIContentService {
   /**
    * Generate content in batch for multiple requests
    */
-  async generateBatch(
-    requests: ContentGenerationRequest[]
-  ): Promise<ContentGenerationResult[]> {
+  async generateBatch(requests: ContentGenerationRequest[]): Promise<ContentGenerationResult[]> {
     const results: ContentGenerationResult[] = [];
 
     for (const request of requests) {
@@ -283,9 +269,14 @@ export class AIContentService {
 
     prompt += `Tone: ${request.tone}\n\n`;
 
+    // Add customer context FIRST for better personalization
+    if (request.context) {
+      prompt += `${request.context}\n\n`;
+    }
+
     if (request.keyPoints && request.keyPoints.trim().length > 0) {
       prompt += `Key points to include:\n`;
-      const points = request.keyPoints.split('\n').filter(p => p.trim());
+      const points = request.keyPoints.split('\n').filter((p) => p.trim());
       points.forEach((point, index) => {
         prompt += `${index + 1}. ${point.trim()}\n`;
       });
@@ -296,16 +287,17 @@ export class AIContentService {
       prompt += `Maximum length: ${request.maxLength} characters\n\n`;
     }
 
-    if (request.context) {
-      prompt += `Additional context: ${request.context}\n\n`;
-    }
-
     if (request.variables && Object.keys(request.variables).length > 0) {
-      prompt += `Use these variables for personalization (format: {{variable_name}}):\n`;
-      Object.keys(request.variables).forEach((key) => {
-        prompt += `- {{${key}}}\n`;
+      prompt += `IMPORTANT - Personalization Variables:\n`;
+      prompt += `You MUST use these customer details to personalize the message:\n`;
+      Object.entries(request.variables).forEach(([key, value]) => {
+        prompt += `- ${key}: ${value}\n`;
       });
-      prompt += '\n';
+      prompt += '\nPersonalize the message by:\n';
+      prompt += '1. Addressing the customer by their name\n';
+      prompt += '2. Mentioning their city/location if relevant\n';
+      prompt += '3. Tailoring the offer based on their profile (age, occupation, income, etc.)\n';
+      prompt += '4. Making the message feel personal, not generic\n\n';
     }
 
     // Content type specific instructions
