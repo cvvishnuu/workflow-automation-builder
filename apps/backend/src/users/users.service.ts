@@ -27,24 +27,23 @@ export class UsersService {
     });
 
     // If user doesn't exist, create it
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          clerkId: userInfo.clerkId,
-          email: userInfo.email,
-          name: userInfo.name,
-        },
-      });
-    } else {
-      // Update email/name if changed
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          email: userInfo.email,
-          name: userInfo.name,
-        },
-      });
-    }
+    user ??= await this.prisma.user.create({
+      data: {
+        clerkId: userInfo.clerkId,
+        email: userInfo.email,
+        name: userInfo.name,
+      },
+    });
+    // else {
+    //   // Update email/name if changed
+    //   user = await this.prisma.user.update({
+    //     where: { id: user.id },
+    //     data: {
+    //       email: userInfo.email,
+    //       name: userInfo.name,
+    //     },
+    //   });
+    // }
 
     return user;
   }
