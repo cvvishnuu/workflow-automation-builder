@@ -112,11 +112,21 @@ export class PublicApiService {
         error: true,
         startedAt: true,
         completedAt: true,
+        approvalData: true,
       },
     });
 
     if (!execution) {
       throw new NotFoundException('Execution not found');
+    }
+
+    if (execution.status === 'pending_approval') {
+      return {
+        executionId: execution.id,
+        status: execution.status,
+        message: 'Execution pending approval',
+        approvalData: this.transformApprovalData(execution.approvalData),
+      };
     }
 
     if (execution.status !== 'completed' && execution.status !== 'failed') {
@@ -209,6 +219,9 @@ export class PublicApiService {
         name: row.name || row.customer_name || 'Unknown',
         product: row.product || row.product_name || product,
         message: row.generated_content || row.message || '',
+        xai: row.xai,
+        xai_error: row.xai_error,
+        generation_error: row.generation_error,
         // Convert risk score to compliance score (risk score: lower is better, compliance score: higher is better)
         complianceScore: 100 - (row.compliance_risk_score || row.complianceScore || 0),
         complianceStatus: this.mapComplianceStatus(row.compliance_status || row.complianceStatus),

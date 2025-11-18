@@ -29,6 +29,20 @@ export enum NodeType {
   COMPLIANCE_REPORT = 'compliance_report',
 }
 
+// Explainability metadata for generated messages
+export interface XaiFeatureContribution {
+  feature: string;
+  weight?: number; // 0-1 optional, depending on model response
+  impact: string;
+}
+
+export interface XaiMetadata {
+  reasoningTrace?: string[];
+  decisionFactors?: string[];
+  confidence?: number; // 0-1
+  featureContributions?: XaiFeatureContribution[];
+}
+
 /**
  * HTTP methods supported by HTTP Request nodes
  */

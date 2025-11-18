@@ -13,6 +13,7 @@
 
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { XaiMetadata } from '@workflow/shared-types';
 
 export interface ContentGenerationRequest {
   contentType: 'email' | 'sms' | 'whatsapp' | 'social' | 'custom';
@@ -31,6 +32,8 @@ export interface ContentGenerationResult {
   tokens: number;
   model: string;
   generatedAt: Date;
+  xai?: XaiMetadata;
+  xaiError?: string;
 }
 
 @Injectable()
@@ -46,10 +49,12 @@ export class AIContentService {
   private readonly OPENAI_MODEL = 'gpt-4o-mini';
   private readonly GEMINI_MODEL = 'gemini-2.5-flash'; // Free tier available
   private readonly MAX_RETRIES = 3;
+  private readonly XAI_ENABLED: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.OPENAI_API_KEY = this.configService.get<string>('OPENAI_API_KEY') || '';
     this.GEMINI_API_KEY = this.configService.get<string>('GEMINI_API_KEY') || '';
+    this.XAI_ENABLED = this.configService.get<string>('XAI_ENABLED') !== 'false';
 
     // Use Gemini by default if available, otherwise OpenAI
     this.AI_PROVIDER = this.GEMINI_API_KEY ? 'gemini' : 'openai';
@@ -141,7 +146,8 @@ export class AIContentService {
       content,
       request,
       data.usage?.total_tokens || 0,
-      data.model
+      data.model,
+      undefined
     );
   }
 
@@ -152,7 +158,18 @@ export class AIContentService {
     request: ContentGenerationRequest,
     prompt: string
   ): Promise<ContentGenerationResult> {
-    const fullPrompt = `${this.getSystemPrompt()}\n\n${prompt}`;
+    // Rich prompt with XAI JSON contract to make parsing deterministic
+    const fullPrompt =
+      `${this.getSystemPrompt()}\n\n${prompt}\n\n` +
+      `Respond ONLY as compact JSON with this schema:\n` +
+      `{\n` +
+      `  "message": "string",\n` +
+      `  "reasoning_trace": ["step by step rationale"],\n` +
+      `  "decision_factors": ["key factor"],\n` +
+      `  "confidence": 0.0-1.0,\n` +
+      `  "feature_contributions": [{"feature": "tone", "weight": 0-1, "impact": "how it influenced text"}]\n` +
+      `}\n` +
+      `Keep reasoning concise (3-6 steps) and feature_contributions to top 5.`;
 
     const response = await fetch(`${this.GEMINI_API_URL}?key=${this.GEMINI_API_KEY}`, {
       method: 'POST',
@@ -172,6 +189,7 @@ export class AIContentService {
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: request.maxLength ? Math.min(request.maxLength * 4, 8000) : 4000,
+          responseMimeType: 'application/json',
         },
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -184,18 +202,17 @@ export class AIContentService {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      const detail = errorData.error?.message || 'Unknown error';
       console.error('[Gemini API] Error response:', JSON.stringify(errorData, null, 2));
-      throw new Error(
-        `Gemini API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`
-      );
+      throw new Error(`Gemini API error (${response.status}): ${detail}`);
     }
 
     const data = await response.json();
     console.log('[Gemini API] Full response:', JSON.stringify(data, null, 2));
 
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-    if (!content) {
+    if (!rawContent) {
       console.error(
         '[Gemini API] No content in response. Full data:',
         JSON.stringify(data, null, 2)
@@ -209,10 +226,20 @@ export class AIContentService {
       throw new Error('Empty response from Gemini API');
     }
 
-    // Estimate tokens (Gemini doesn't always return token count)
-    const estimatedTokens = Math.ceil(content.length / 4);
+    const parsed = this.XAI_ENABLED
+      ? this.parseXaiJson(rawContent)
+      : { message: rawContent, xai: undefined, xaiError: undefined };
 
-    return this.processGeneratedContent(content, request, estimatedTokens, this.GEMINI_MODEL);
+    const estimatedTokens = Math.ceil(parsed.message.length / 4);
+
+    return this.processGeneratedContent(
+      parsed.message,
+      request,
+      estimatedTokens,
+      this.GEMINI_MODEL,
+      parsed.xai,
+      parsed.xaiError
+    );
   }
 
   /**
@@ -222,7 +249,9 @@ export class AIContentService {
     content: string,
     request: ContentGenerationRequest,
     tokens: number,
-    model: string
+    model: string,
+    xai?: XaiMetadata,
+    xaiError?: string
   ): ContentGenerationResult {
     // AI should have already personalized the content with customer data
     // No need for variable replacement since we provided actual values in the prompt
@@ -232,6 +261,8 @@ export class AIContentService {
       tokens,
       model,
       generatedAt: new Date(),
+      xai,
+      xaiError,
     };
   }
 
@@ -406,5 +437,67 @@ For disclaimers on financial products, use phrases like:
       isValid: warnings.length === 0,
       warnings,
     };
+  }
+
+  /**
+   * Parse XAI JSON from model response safely
+   */
+  private parseXaiJson(raw: string): { message: string; xai?: XaiMetadata; xaiError?: string } {
+    try {
+      let text = raw.trim();
+
+      // Strip markdown fences if present
+      if (text.startsWith('```json')) {
+        text = text
+          .replace(/^```json\s*/, '')
+          .replace(/```$/, '')
+          .trim();
+      } else if (text.startsWith('```')) {
+        text = text
+          .replace(/^```\s*/, '')
+          .replace(/```$/, '')
+          .trim();
+      }
+
+      const parsed = JSON.parse(text);
+      const message = parsed.message || parsed.content || raw;
+
+      const xai: XaiMetadata = {
+        reasoningTrace: Array.isArray(parsed.reasoning_trace)
+          ? parsed.reasoning_trace.map((r: any) => String(r))
+          : parsed.reasoning_trace
+            ? [String(parsed.reasoning_trace)]
+            : [],
+        decisionFactors: Array.isArray(parsed.decision_factors)
+          ? parsed.decision_factors.map((f: any) => String(f))
+          : [],
+        confidence:
+          typeof parsed.confidence === 'number'
+            ? Math.min(Math.max(parsed.confidence, 0), 1)
+            : undefined,
+        featureContributions: Array.isArray(parsed.feature_contributions)
+          ? parsed.feature_contributions
+              .filter((fc: any) => fc?.feature)
+              .map((fc: any) => ({
+                feature: String(fc.feature),
+                weight:
+                  typeof fc.weight === 'number' ? Math.min(Math.max(fc.weight, 0), 1) : undefined,
+                impact: fc.impact ? String(fc.impact) : '',
+              }))
+          : [],
+      };
+
+      // Only attach xai if we have at least some signals
+      const hasXai =
+        (xai.reasoningTrace && xai.reasoningTrace.length > 0) ||
+        (xai.decisionFactors && xai.decisionFactors.length > 0) ||
+        xai.confidence !== undefined ||
+        (xai.featureContributions && xai.featureContributions.length > 0);
+
+      return { message, xai: hasXai ? xai : undefined };
+    } catch (error) {
+      console.warn('[XAI] Failed to parse XAI JSON, returning raw message. Error:', error.message);
+      return { message: raw, xaiError: 'Gemini returned malformed JSON for XAI' };
+    }
   }
 }

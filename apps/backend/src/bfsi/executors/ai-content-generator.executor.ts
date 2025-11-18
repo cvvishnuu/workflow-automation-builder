@@ -137,6 +137,8 @@ export class AIContentGeneratorNodeExecutor extends BaseNodeExecutor {
             generated_at: result.generatedAt,
             content_type: result.contentType,
             tokens_used: result.tokens,
+            xai: result.xai,
+            xai_error: result.xaiError,
           });
 
           totalTokens += result.tokens;
