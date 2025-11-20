@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Public API Service
  * Business logic for public API endpoints
@@ -222,6 +223,8 @@ export class PublicApiService {
         xai: row.xai,
         xai_error: row.xai_error,
         generation_error: row.generation_error,
+        compliance_xai: row.compliance_xai,
+        compliance_xai_error: row.compliance_xai_error,
         // Convert risk score to compliance score (risk score: lower is better, compliance score: higher is better)
         complianceScore: 100 - (row.compliance_risk_score || row.complianceScore || 0),
         complianceStatus: this.mapComplianceStatus(row.compliance_status || row.complianceStatus),

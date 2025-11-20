@@ -22,7 +22,7 @@
   - `executions`: execution tracking, websocket events, persistence; `WorkflowEngine` handles retries, manual-approval pause/resume, and emits events.
   - `workflows`: CRUD and workflow runner wiring.
   - `nodes`: executor factory for node types (trigger, HTTP, data transform, conditional, delay, email, Google Calendar, WhatsApp, manual approval, BFSI CSV upload/AI content/compliance checker/report).
-  - `bfsi`: CSV upload + parsing/preview/delete, PII anonymization, AI content generation, compliance checking (includes RAG), audit trail, compliance stats/report endpoints.
+  - `bfsi`: CSV upload + parsing/preview/delete, PII anonymization, AI content generation, compliance checking (includes RAG + XAI), audit trail, compliance stats/report endpoints.
   - `auth`: `ClerkAuthGuard` verifies Bearer token via Clerk; fallback to API key match (`PUBLIC_API_KEY`).
   - `api-keys`: management of API keys (for Authorized bearer) with usage counters, expiry, webhook config.
   - `integrations`: catalog + encrypted credentials storage (requires `ENCRYPTION_KEY`); default SendGrid/Google Calendar/Twilio integrations seeded.

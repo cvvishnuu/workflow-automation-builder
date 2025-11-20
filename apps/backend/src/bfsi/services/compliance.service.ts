@@ -10,7 +10,10 @@
  * - Multi-category validation (email, SMS, WhatsApp, social)
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Injectable } from '@nestjs/common';
+import { ComplianceXaiMetadata } from '@workflow/shared-types';
 
 export interface ComplianceCheckRequest {
   content: string;
@@ -25,6 +28,8 @@ export interface ComplianceCheckResult {
   suggestions: string[];
   complianceRules: string[];
   summary: string;
+  xai?: ComplianceXaiMetadata;
+  xaiError?: string;
 }
 
 export interface FlaggedTerm {
@@ -40,35 +45,124 @@ export class ComplianceService {
   // Prohibited terms with severity levels
   private readonly PROHIBITED_TERMS = [
     // Critical - Absolute guarantees (RBI/SEBI violation)
-    { pattern: /guaranteed?\s+returns?/gi, category: 'misleading', severity: 'critical', reason: 'Prohibited: Cannot guarantee investment returns' },
-    { pattern: /100%\s+safe/gi, category: 'misleading', severity: 'critical', reason: 'Prohibited: Cannot claim absolute safety' },
-    { pattern: /no\s+risk/gi, category: 'misleading', severity: 'critical', reason: 'Prohibited: All investments carry some risk' },
-    { pattern: /assured\s+profit/gi, category: 'misleading', severity: 'critical', reason: 'Prohibited: Cannot assure profits' },
-    { pattern: /risk[- ]?free/gi, category: 'misleading', severity: 'critical', reason: 'Prohibited: No investment is risk-free' },
+    {
+      pattern: /guaranteed?\s+returns?/gi,
+      category: 'misleading',
+      severity: 'critical',
+      reason: 'Prohibited: Cannot guarantee investment returns',
+    },
+    {
+      pattern: /100%\s+safe/gi,
+      category: 'misleading',
+      severity: 'critical',
+      reason: 'Prohibited: Cannot claim absolute safety',
+    },
+    {
+      pattern: /no\s+risk/gi,
+      category: 'misleading',
+      severity: 'critical',
+      reason: 'Prohibited: All investments carry some risk',
+    },
+    {
+      pattern: /assured\s+profit/gi,
+      category: 'misleading',
+      severity: 'critical',
+      reason: 'Prohibited: Cannot assure profits',
+    },
+    {
+      pattern: /risk[- ]?free/gi,
+      category: 'misleading',
+      severity: 'critical',
+      reason: 'Prohibited: No investment is risk-free',
+    },
 
     // High severity - Exaggerated claims
-    { pattern: /unlimited\s+returns?/gi, category: 'exaggeration', severity: 'high', reason: 'Exaggerated claim not allowed' },
-    { pattern: /get\s+rich\s+quick/gi, category: 'exaggeration', severity: 'high', reason: 'Misleading promise' },
-    { pattern: /double\s+your\s+money/gi, category: 'exaggeration', severity: 'high', reason: 'Unrealistic promise' },
-    { pattern: /instant\s+approval/gi, category: 'exaggeration', severity: 'high', reason: 'May be misleading; approvals have processes' },
-    { pattern: /zero\s+interest/gi, category: 'incomplete', severity: 'high', reason: 'Requires full disclosure of terms' },
+    {
+      pattern: /unlimited\s+returns?/gi,
+      category: 'exaggeration',
+      severity: 'high',
+      reason: 'Exaggerated claim not allowed',
+    },
+    {
+      pattern: /get\s+rich\s+quick/gi,
+      category: 'exaggeration',
+      severity: 'high',
+      reason: 'Misleading promise',
+    },
+    {
+      pattern: /double\s+your\s+money/gi,
+      category: 'exaggeration',
+      severity: 'high',
+      reason: 'Unrealistic promise',
+    },
+    {
+      pattern: /instant\s+approval/gi,
+      category: 'exaggeration',
+      severity: 'high',
+      reason: 'May be misleading; approvals have processes',
+    },
+    {
+      pattern: /zero\s+interest/gi,
+      category: 'incomplete',
+      severity: 'high',
+      reason: 'Requires full disclosure of terms',
+    },
 
     // Medium severity - Missing disclosures
-    { pattern: /best\s+returns?/gi, category: 'comparison', severity: 'medium', reason: 'Comparative claims need substantiation' },
-    { pattern: /highest\s+interest/gi, category: 'comparison', severity: 'medium', reason: 'Comparative claims need substantiation' },
-    { pattern: /lowest\s+rate/gi, category: 'comparison', severity: 'medium', reason: 'Comparative claims need substantiation' },
-    { pattern: /pre[- ]?approved/gi, category: 'incomplete', severity: 'medium', reason: 'Requires clear eligibility criteria' },
+    {
+      pattern: /best\s+returns?/gi,
+      category: 'comparison',
+      severity: 'medium',
+      reason: 'Comparative claims need substantiation',
+    },
+    {
+      pattern: /highest\s+interest/gi,
+      category: 'comparison',
+      severity: 'medium',
+      reason: 'Comparative claims need substantiation',
+    },
+    {
+      pattern: /lowest\s+rate/gi,
+      category: 'comparison',
+      severity: 'medium',
+      reason: 'Comparative claims need substantiation',
+    },
+    {
+      pattern: /pre[- ]?approved/gi,
+      category: 'incomplete',
+      severity: 'medium',
+      reason: 'Requires clear eligibility criteria',
+    },
 
     // Low severity - Aggressive language
-    { pattern: /act\s+now/gi, category: 'pressure', severity: 'low', reason: 'May create undue pressure' },
-    { pattern: /limited\s+time\s+offer/gi, category: 'pressure', severity: 'low', reason: 'Should specify exact deadline' },
-    { pattern: /don\'t\s+miss\s+out/gi, category: 'pressure', severity: 'low', reason: 'Avoid fear-of-missing-out tactics' },
+    {
+      pattern: /act\s+now/gi,
+      category: 'pressure',
+      severity: 'low',
+      reason: 'May create undue pressure',
+    },
+    {
+      pattern: /limited\s+time\s+offer/gi,
+      category: 'pressure',
+      severity: 'low',
+      reason: 'Should specify exact deadline',
+    },
+    {
+      pattern: /don't\s+miss\s+out/gi,
+      category: 'pressure',
+      severity: 'low',
+      reason: 'Avoid fear-of-missing-out tactics',
+    },
   ];
 
   // Required disclaimers based on product category
   private readonly REQUIRED_DISCLAIMERS = {
     banking: ['terms and conditions apply', 'eligibility criteria'],
-    investment: ['subject to market risks', 'read all scheme-related documents', 'past performance'],
+    investment: [
+      'subject to market risks',
+      'read all scheme-related documents',
+      'past performance',
+    ],
     insurance: ['terms and conditions', 'exclusions apply', 'claim settlement'],
     loan: ['subject to credit approval', 'processing fees', 'terms and conditions'],
     'credit-card': ['terms and conditions', 'eligibility criteria', 'fees and charges'],
@@ -116,7 +210,8 @@ export class ComplianceService {
     const detectedCategory = request.productCategory || this.detectProductCategory(content);
 
     // 3. Check for required disclaimers
-    const requiredDisclaimers = this.REQUIRED_DISCLAIMERS[detectedCategory] || this.REQUIRED_DISCLAIMERS.general;
+    const requiredDisclaimers =
+      this.REQUIRED_DISCLAIMERS[detectedCategory] || this.REQUIRED_DISCLAIMERS.general;
     const missingDisclaimers = requiredDisclaimers.filter(
       (disclaimer) => !new RegExp(disclaimer, 'i').test(content)
     );
@@ -271,13 +366,14 @@ export class ComplianceService {
         }
         break;
 
-      case 'social':
+      case 'social': {
         // Social media should have hashtag limits
         const hashtagCount = (content.match(/#/g) || []).length;
         if (hashtagCount > 5) {
           suggestions.push(`Reduce hashtags from ${hashtagCount} to 3-5 for better engagement`);
         }
         break;
+      }
     }
   }
 

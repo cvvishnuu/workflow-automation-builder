@@ -43,6 +43,21 @@ export interface XaiMetadata {
   featureContributions?: XaiFeatureContribution[];
 }
 
+// Compliance-specific XAI (extends base XAI with rule/evidence context)
+export interface ComplianceRuleHit {
+  rule: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  reason?: string;
+  evidence?: string;
+  sourceId?: string; // e.g., RAG chunk or KB reference
+}
+
+export interface ComplianceXaiMetadata extends XaiMetadata {
+  ruleHits?: ComplianceRuleHit[];
+  evidence?: Array<{ sourceId?: string; text: string }>;
+  xaiError?: string;
+}
+
 /**
  * HTTP methods supported by HTTP Request nodes
  */
