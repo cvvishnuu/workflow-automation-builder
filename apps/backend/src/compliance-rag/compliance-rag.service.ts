@@ -71,23 +71,31 @@ export class ComplianceRAGService {
       // Build RAG prompt with compliance knowledge
       const prompt = this.buildCompliancePrompt(content, contentType, productCategory);
 
-      // Call Gemini API with retries
-      const data = await this.callGeminiWithRetry(prompt);
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      // First call: compliance verdict (without XAI)
+      const verdictResponse = await this.callGeminiWithRetry(prompt);
+      const verdictText = verdictResponse.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-      if (!text) {
+      if (!verdictText) {
         throw new Error('Empty response from Gemini API');
       }
 
-      // Log Gemini's raw response for debugging
-      this.logger.debug(`[RAG] Gemini raw response: ${text.substring(0, 500)}...`);
+      this.logger.debug(`[RAG] Gemini verdict response: ${verdictText.substring(0, 500)}...`);
       console.error(
-        '[ComplianceRAGService] Full compliance response:',
-        JSON.stringify(data, null, 2)
+        '[ComplianceRAGService] Full compliance verdict response:',
+        JSON.stringify(verdictResponse, null, 2)
       );
 
-      // Parse Gemini's response
-      const complianceResult = this.parseGeminiResponse(text, content);
+      const complianceResult = this.parseComplianceVerdict(verdictText, content);
+
+      // Second call: XAI explanation
+      const xaiResult = await this.fetchComplianceXai({
+        content,
+        contentType,
+        productCategory,
+        verdict: complianceResult,
+      });
+      complianceResult.xai = xaiResult?.xai;
+      complianceResult.xaiError = xaiResult?.xaiError;
 
       this.logger.log(
         `Compliance check completed: ${complianceResult.isPassed ? 'PASSED' : 'FAILED'} (Risk: ${complianceResult.riskScore})`
@@ -123,31 +131,59 @@ Return JSON only, with this schema:
   "riskScore": 0-100,
   "violations": [{"term": "text", "severity": "low|medium|high|critical", "reason": "why", "suggestion": "fix"}],
   "missingDisclaimers": ["required disclaimers not present"],
-  "summary": "brief assessment",
-  "xai": {
-    "reasoning_trace": ["step-by-step rationale, keep 3-6 items"],
-    "decision_factors": ["key rules/factors applied"],
-    "confidence": 0-1,
-    "rule_hits": [{"rule": "rule id/name", "severity": "low|medium|high|critical", "reason": "why violated or satisfied", "evidence": "snippet"}],
-    "feature_contributions": [{"feature": "term/tone/product", "weight": 0-1, "impact": "effect on risk"}],
-    "evidence": [{"sourceId": "kb or chunk id", "text": "supporting text"}]
-  }
+  "summary": "brief assessment"
 }
 
 Constraints:
 - Respond ONLY in JSON.
-- Keep reasoning_trace to max 2 short sentences.
-- Limit decision_factors to max 2 items.
-- Limit rule_hits and feature_contributions to top 2 each (<=80 characters per item).
 - Keep summary under 120 characters.
-- If unsure, set confidence to a reasonable estimate (0-1).
-- Even when content is compliant (no violations), still populate xai with reasoning_trace and decision_factors explaining why it passed.`;
+- List all violations clearly with severity and reason.
+- Include all missing disclaimers.`;
+  }
+
+  private buildXaiPrompt(payload: {
+    content: string;
+    contentType: string;
+    verdict: ComplianceCheckResult;
+  }): string {
+    const { content, contentType, verdict } = payload;
+    return `You are an AI compliance auditor explaining a verdict for a ${contentType}.
+
+Content: "${content}"
+
+Verdict JSON:
+${JSON.stringify({
+  isPassed: verdict.isPassed,
+  riskScore: verdict.riskScore,
+  flaggedTerms: verdict.flaggedTerms,
+  summary: verdict.summary,
+})}
+
+Return ONLY JSON with this schema:
+{
+  "reasoning_trace": ["max 3 short sentences explaining pass/fail"],
+  "decision_factors": ["top 3 rules or checks considered"],
+  "confidence": 0-1,
+  "rule_hits": [
+    {"rule": "rule/category", "severity": "low|medium|high|critical|satisfied", "reason": "why", "evidence": "snippet"}
+  ],
+  "feature_contributions": [
+    {"feature": "disclaimer|tone|term", "weight": 0-1, "impact": "how it affected risk"}
+  ],
+  "evidence": [{"sourceId": "rule or data source", "text": "supporting evidence"}]
+}
+
+Constraints:
+- Respond ONLY in JSON.
+- Keep reasoning_trace, decision_factors, and rule_hits concise (<=80 characters each item).
+- If no violations, explain why it still passed (rules satisfied).
+- If unsure, set confidence to a reasonable estimate (0-1).`;
   }
 
   /**
    * Parse Gemini's JSON response
    */
-  private parseGeminiResponse(
+  private parseComplianceVerdict(
     geminiResponse: string,
     originalContent: string
   ): ComplianceCheckResult {
@@ -189,22 +225,6 @@ Constraints:
         }
       });
 
-      let xai = this.buildComplianceXai(parsed);
-      let xaiError = xai ? undefined : 'XAI missing in response';
-
-      // Build fallback XAI from violations/missing disclaimers if model omitted XAI
-      if (!xai) {
-        xai = this.buildFallbackXai(
-          flaggedTerms,
-          suggestions,
-          parsed.riskScore,
-          parsed.missingDisclaimers
-        );
-        if (xai) {
-          xaiError = 'Gemini omitted compliance XAI; generated fallback from violations/summary';
-        }
-      }
-
       return {
         isPassed: parsed.isPassed !== false && parsed.riskScore < 50,
         riskScore: Math.min(Math.max(parsed.riskScore || 0, 0), 100),
@@ -218,8 +238,6 @@ Constraints:
           'Data Protection and Privacy Act (DPDPA)',
         ],
         summary: parsed.summary || 'Compliance check completed via AI',
-        xai,
-        xaiError,
       };
     } catch (error) {
       this.logger.error(`Failed to parse Gemini response: ${error.message}`);
@@ -523,5 +541,59 @@ Constraints:
       xai: basicXai,
       xaiError: 'Gemini unavailable; used basic compliance check',
     };
+  }
+
+  /**
+   * Fetch compliance XAI via separate Gemini call
+   */
+  private async fetchComplianceXai(payload: {
+    content: string;
+    contentType: string;
+    productCategory?: string;
+    verdict: ComplianceCheckResult;
+  }): Promise<{ xai?: ComplianceXaiMetadata; xaiError?: string }> {
+    try {
+      const prompt = this.buildXaiPrompt(payload);
+      const data = await this.callGeminiWithRetry(prompt);
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+      if (!text) {
+        throw new Error('Empty XAI response from Gemini API');
+      }
+
+      this.logger.debug(`[RAG] Gemini XAI response: ${text.substring(0, 500)}...`);
+      console.error(
+        '[ComplianceRAGService] Full compliance XAI response:',
+        JSON.stringify(data, null, 2)
+      );
+
+      const parsed = this.safeParseJson(text);
+      const xai = this.buildComplianceXai({ xai: parsed });
+
+      if (xai) {
+        return { xai };
+      }
+
+      const fallbackXai = this.buildFallbackXai(
+        payload.verdict.flaggedTerms || [],
+        payload.verdict.suggestions || [],
+        payload.verdict.riskScore
+      );
+      return {
+        xai: fallbackXai,
+        xaiError: 'Gemini omitted compliance XAI; generated fallback from verdict',
+      };
+    } catch (error) {
+      this.logger.error(`Compliance XAI call failed: ${error.message}`);
+      const fallbackXai = this.buildFallbackXai(
+        payload.verdict.flaggedTerms || [],
+        payload.verdict.suggestions || [],
+        payload.verdict.riskScore
+      );
+      return {
+        xai: fallbackXai,
+        xaiError: 'Gemini compliance XAI call failed; using fallback explanation',
+      };
+    }
   }
 }

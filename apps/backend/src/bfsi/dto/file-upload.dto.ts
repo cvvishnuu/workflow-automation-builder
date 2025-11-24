@@ -2,7 +2,7 @@
  * DTOs for File Upload API
  */
 
-import { IsString, IsOptional, IsBoolean, IsArray, IsNumber } from 'class-validator';
+import { IsOptional, IsBoolean, IsArray, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class FileUploadResponseDto {

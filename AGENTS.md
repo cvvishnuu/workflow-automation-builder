@@ -1,83 +1,128 @@
 # Agent Notes
 
-## What This Repo Is
+## Repo Overview
 
-- **Workflow Automation MVP (WAM)** monorepo: Next.js 14 App Router frontend + NestJS backend + shared types (pnpm + Turborepo).
-- Primary purpose: build and execute node-based workflows (React Flow editor), expose public API for workflow execution (used by BCG) with auth via Clerk/API key; store state in Postgres via Prisma.
+- **Workflow Automation MVP (WAM)** monorepo with two main apps:
+  - `apps/frontend`: Next.js 14 (App Router) workflow UI (React Flow editor, executions, API keys dashboard). Uses Clerk for auth, Axios for backend calls, Zustand, Tailwind/ShadCN.
+  - `apps/backend`: NestJS REST + WebSocket server handling workflows, executions, nodes, BFSI-specific helpers, and public API endpoints used by BFSI Campaign Generator (BCG). Uses Prisma/Postgres, class-validator, Swagger.
+- Shared types live under `packages/shared-types`.
+- Tooling: pnpm workspaces + Turborepo. `npm run dev` starts both apps (turbo run dev).
 
-## Frontend (apps/frontend)
+## Frontend Highlights (apps/frontend)
 
-- Stack: Next.js 14 App Router, Tailwind/ShadCN, Zustand, React Flow, Axios, Clerk.
-- Key routes: `src/app/page.tsx` (landing); `/workflows` (list/editor), `/executions` (status), `/api-keys`, auth pages `sign-in`/`sign-up` (Clerk components).
-- Auth middleware: `src/middleware.ts` uses Clerk `authMiddleware`; currently public routes include `/` + auth; everything else protected unless marked otherwise. Adjust here if public API docs or other pages need exposure.
-- API client (typical): Axios hitting backend at `NEXT_PUBLIC_API_URL` (default http://localhost:3001/api/v1). WebSocket URL `NEXT_PUBLIC_WS_URL` for live updates.
-- State: Zustand stores under `src/stores`; hooks under `src/hooks`; shared UI in `src/components`.
-- Styling: global CSS `src/app/globals.css`; shadcn UI components in `src/components/ui`.
+- `src/app` holds App Router routes:
+  - `/` landing with overview, CTA.
+  - `/workflows` for list/editor (React Flow, custom components).
+  - `/executions` and `/executions/[id]` for monitoring.
+  - `/api-keys` management.
+  - Clerk auth pages (`sign-in`, `sign-up`) mounted via catch-all routes recommended by Clerk.
+- Middleware (`apps/frontend/src/middleware.ts`): `'`authMiddleware`from Clerk with`publicRoutes: ['/', '/sign-in', '/sign-up']` by default. Adjust if public API docs or other paths need to bypass auth.
+- `src/components` includes UI sections (workflow editor, node settings, execution logs).
+- `src/stores` (Zustand) track workflows, nodes, execution state.
+- `src/lib/api.ts` (check for location) configures Axios base URL (`NEXT_PUBLIC_API_URL`), websockets, etc.
+- Styles: `globals.css`, Shadcn UI under `src/components/ui`.
+- Env expectations: `.env.local` should define `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, etc.
 
-## Backend (apps/backend)
+## Backend Highlights (apps/backend)
 
-- Stack: NestJS, PostgreSQL, Prisma, class-validator, Swagger. Entry: `src/main.ts`.
-- Modules (src/):
-  - `public-api`: routes under `/api/v1/public` for agent execution/status/results/approval; guarded by `ClerkAuthGuard` (valid Clerk token **or** API key). Token-bucket rate limiter per API key; keys are SHA-256 hashed; webhook sender with HMAC signing + retries; approval payload transformer for frontend fit.
-  - `executions`: execution tracking, websocket events, persistence; `WorkflowEngine` handles retries, manual-approval pause/resume, and emits events.
-  - `workflows`: CRUD and workflow runner wiring.
-  - `nodes`: executor factory for node types (trigger, HTTP, data transform, conditional, delay, email, Google Calendar, WhatsApp, manual approval, BFSI CSV upload/AI content/compliance checker/report).
-  - `bfsi`: CSV upload + parsing/preview/delete, PII anonymization, AI content generation, compliance checking (includes RAG + XAI), audit trail, compliance stats/report endpoints.
-  - `auth`: `ClerkAuthGuard` verifies Bearer token via Clerk; fallback to API key match (`PUBLIC_API_KEY`).
-  - `api-keys`: management of API keys (for Authorized bearer) with usage counters, expiry, webhook config.
-  - `integrations`: catalog + encrypted credentials storage (requires `ENCRYPTION_KEY`); default SendGrid/Google Calendar/Twilio integrations seeded.
-  - `websocket`: Socket.IO gateway (execution/node updates, room-based execution subscriptions).
-  - `compliance-rag`: Gemini/OpenAI content/risk services; needs `GEMINI_API_KEY` or `OPENAI_API_KEY`.
-  - `health`: `/health` DB connectivity probe.
-  - `users`: sync/find-or-create users when Clerk token/API key present.
-- Prisma: schema in `apps/backend/prisma/schema.prisma`; requires Postgres reachable via `DATABASE_URL`.
-  - Models include Users, Workflows, WorkflowExecutions (+manual approval fields), NodeExecutions, NodeDefinitions, Integrations, Credentials (encrypted), WorkflowTemplates, FileUploads, ComplianceChecks, ApiKeys (usage limit, webhook config).
-- Docs: Swagger at `/api/docs` when running.
+- Main modules (under `src/`):
+  - `public-api`: Exposes `/api/v1/public/...` endpoints used by BCG to start workflows and fetch status/results/pending-approval.
+  - `executions`: Execution orchestration, storing state, providing logs, hooking into websocket.
+  - `workflows`: CRUD + runner for workflow definitions (nodes arranged via React Flow on frontend).
+  - `nodes`: Contains the executor implementations (HTTP request nodes, conditionals, data transforms, delays, BFSI-specific nodes).
+  - `auth`: `ClerkAuthGuard` verifying Bearer tokens via Clerk (`CLERK_SECRET_KEY`) or matching API key (config `PUBLIC_API_KEY`).
+  - `api-keys`: Manage API keys for authenticated clients.
+  - `websocket`: Socket.IO gateway for execution updates.
+  - `compliance-rag`, `bfsi` modules for BFSI-specific logic and AI compliance scoring (Gemini/OpenAI).
+  - `users`: Syncs/upserts users when authenticated.
+- Prisma schema in `apps/backend/prisma/schema.prisma`. Run migrations via `pnpm prisma:migrate`.
+- Env `.env` example:
+  ```env
+  DATABASE_URL=postgresql://user:pass@localhost:5432/workflow_db
+  PORT=3001
+  CORS_ORIGIN=http://localhost:3000
+  CLERK_SECRET_KEY=sk_...
+  PUBLIC_API_KEY=<same as client API key>
+  GEMINI_API_KEY=...
+  OPENAI_API_KEY=...
+  ```
+- Public API docs in `apps/backend/PUBLIC_API.md` (examples for BCG integration).
+- `ClerkAuthGuard` extracts Authorization header; if it matches `PUBLIC_API_KEY` or verifies as Clerk token, request proceeds. Otherwise 401.
 
 ## Auth & API Expectations
 
-- **Public execution endpoints** (used by BCG): `/api/v1/public/agents/:id/execute`, `/public/executions/:id/status|results|pending-approval|approve|reject`.
-- Backend guard accepts:
-  1. Bearer Clerk JWT (from `Authorization: Bearer <token>`), or
-  2. API key matching `PUBLIC_API_KEY` (from `Authorization: Bearer <API_KEY>` or `x-api-key`).
-- If `PUBLIC_API_KEY` is unset or mismatched, calls will be rejected with 401. Ensure WAM backend `.env` sets `PUBLIC_API_KEY` to the value clients send (e.g., BCG’s `NEXT_PUBLIC_API_KEY`).
-- Frontend middleware protects app routes; adjust `publicRoutes/ignoredRoutes` in `apps/frontend/src/middleware.ts` if needed.
+- External clients (e.g., BCG) call `/api/v1/public/agents/:workflowId/execute` + related endpoints. They must send `Authorization: Bearer <API_KEY>` equal to `PUBLIC_API_KEY` or a valid Clerk JWT token.
+- If BCG’s `NEXT_PUBLIC_API_KEY` changes, update WAM backend `PUBLIC_API_KEY` accordingly.
+- Frontend's Clerk middleware ensures UI routes require login; only `/`, `/sign-in`, `/sign-up` are publicly accessible by default.
 
-## Environment Variables (common)
+## Scripts / Commands
 
-- Backend (`apps/backend/.env`):
-  - `DATABASE_URL` (Postgres), `PORT` (default 3001), `NODE_ENV`, `CORS_ORIGIN` (e.g., http://localhost:3000).
-  - Auth: `CLERK_SECRET_KEY`, `PUBLIC_API_KEY` (for API-key auth to public endpoints).
-  - AI: `GEMINI_API_KEY`, `OPENAI_API_KEY` (as applicable).
-  - Security: `ENCRYPTION_KEY` (for integration credential encryption).
-- Frontend (`apps/frontend/.env.local`):
-  - `NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1`
-  - `NEXT_PUBLIC_WS_URL=http://localhost:3001`
-  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` (if using Clerk UI auth)
-  - `NEXT_PUBLIC_API_KEY` (used by clients like BCG; should match backend `PUBLIC_API_KEY`).
-
-## Dev Scripts
-
-- Root: `npm run dev` (turbo; runs frontend + backend), `npm run build`, `npm run lint`, `npm run test`.
-- Backend (apps/backend): `pnpm dev` (Nest watch), `pnpm build`, `pnpm prisma:migrate`, `pnpm prisma:studio`.
-- Frontend (apps/frontend): `pnpm dev` (Next), `pnpm build`, `pnpm start`.
+- Root `package.json`:
+  - `npm run dev`: turbo-run dev (frontend + backend + shared types watcher).
+  - `npm run build`, `npm run lint`, `npm run test`.
+- Frontend (apps/frontend):
+  - `pnpm dev`, `pnpm build`, `pnpm start`.
+- Backend (apps/backend):
+  - `pnpm dev` (`nest start --watch`), `pnpm build`, Prisma commands (`pnpm prisma:migrate`, `pnpm prisma:studio`, etc.).
+- Database: Postgres required; sample scripts in `apps/backend/scripts` for seeding/fixes (`fix-workflow.ts`, `verify-ready.js`, etc.).
 
 ## Recent Changes / Gotchas
 
-- Public API calls now rely on API key or Clerk token; ensure `PUBLIC_API_KEY` is set to the client key to avoid 401/“invalid API key.”
-- Frontend middleware currently protects API routes unless explicitly public/ignored; if external clients hit `/api/v1/public/**` via frontend, ensure middleware doesn’t block them.
-- BFF in BCG is unused for these calls; callers hit WAM directly.
-- Sandbox dev ports can conflict (EPERM on 3000/3002); run locally if needed.
+- WAM backend now allows API-key fallback via `PUBLIC_API_KEY`. If unset, all BCG calls via API key fail with “invalid API key.”
+- Middleware in frontend does not automatically expose `/api/v1/public`—if frontend forwards requests, ensure `publicRoutes` / `ignoredRoutes` allow them, or call backend directly.
+- BFF in BCG is not integrated; WAM is the canonical workflow backend.
+- For BFSI compliance nodes, ensure `GEMINI_API_KEY` or `OPENAI_API_KEY` is configured; otherwise, compliance RAG service throws errors.
+- Database seeding/check scripts (under `apps/backend/prisma` and `scripts`) help ensure initial workflows/nodes exist; use as needed.
 
 ## Quick Start Checklist
 
-1. Set backend `.env` with `DATABASE_URL`, `PUBLIC_API_KEY`, `CLERK_SECRET_KEY` (if using Clerk), CORS origins, AI keys.
-2. Set frontend `.env.local` with API/WS URLs and matching `NEXT_PUBLIC_API_KEY` + Clerk publishable key.
-3. Run `npm run dev` from repo root (or start backend/ frontend separately). Verify backend at `http://localhost:3001/api/docs`, frontend at `http://localhost:3000`.
-4. For external clients (e.g., BCG), send `Authorization: Bearer <API_KEY>` matching `PUBLIC_API_KEY` or a valid Clerk token.
+1. Install dependencies: `pnpm install` (root).
+2. Backend env (`apps/backend/.env`): set DB connection, Clerk secret, `PUBLIC_API_KEY`, AI keys.
+3. Frontend env (`apps/frontend/.env.local`): set backend API URL, WS URL, Clerk publishable key, matching `NEXT_PUBLIC_API_KEY`.
+4. Database: run `pnpm prisma:migrate` inside `apps/backend`.
+5. Start dev: `npm run dev` (root) or separately start backend + frontend.
+6. Verify:
+   - Backend at `http://localhost:3001/api/docs`.
+   - Frontend at `http://localhost:3000`.
+   - Public API calls (e.g., via `curl -H "Authorization: Bearer <API_KEY>" http://localhost:3001/api/v1/public/...`) should succeed if API key matches.
 
-## Key Files to Remember
+## File/Folder Cheat Sheet
 
-- Frontend: `apps/frontend/src/app` (routes), `src/middleware.ts` (Clerk), `src/stores`, `src/components`, `src/lib` (API clients), `globals.css`.
-- Backend: `apps/backend/src/auth/clerk-auth.guard.ts`, `apps/backend/src/public-api/*` (API key guard + rate limiter + webhooks + approval data mapper), `executions/workflow-engine.service.ts` (orchestration), modules under `workflows/`, `nodes/`, `websocket/`, `bfsi/`, `integrations/`.
-- Shared types: `packages/shared-types/src/index.ts` used across frontend/backend (node enums/configs, execution/websocket message types).
+- Frontend routes/components: `apps/frontend/src/app`, `src/components`, `src/stores`, `src/lib`.
+- Backend modules: `apps/backend/src/public-api`, `executions`, `workflows`, `nodes`, `auth/clerk-auth.guard.ts`.
+- Public API reference: `apps/backend/PUBLIC_API.md`.
+
+## If Things Break
+
+- 401/invalid API key: ensure WAM `PUBLIC_API_KEY` matches client key and backend restarted.
+- Clerk routing complaints: verify `sign-in`/`sign-up` catch-all routes exist and middleware does not protect them.
+- DB errors: check Postgres connection, run migrations, inspect logs via `prisma:studio`.
+- Execution stuck: use scripts in `apps/backend/scripts` (e.g., `monitor-execution.js`, `fix-workflow.ts`).
+- MAX token errors in compliance XAI: verify `buildCompliancePrompt` does NOT include XAI schema (should be split into two calls).
+
+## XAI (Explainable AI) Implementation
+
+The platform provides transparency for AI decisions through two separate XAI systems:
+
+**Message Generation XAI** (`xai` field):
+
+- Single Gemini API call returns both content and explanation
+- Located: `apps/backend/src/bfsi/services/ai-content.service.ts`
+- Output: `{ content, xai: { reasoningTrace, decisionFactors, confidence, featureContributions } }`
+
+**Compliance Check XAI** (`compliance_xai` field):
+
+- Two-step approach to avoid MAX token errors
+- Call 1: Verdict only (isPassed, riskScore, violations)
+- Call 2: XAI only (reasoning, ruleHits, evidence, confidence)
+- Located: `apps/backend/src/compliance-rag/compliance-rag.service.ts`
+- Output: `{ isPassed, riskScore, compliance_xai: { reasoningTrace, ruleHits, evidence } }`
+
+**Key Fix** (Nov 2025): Split compliance RAG prompt to prevent Gemini 2000-token output limit. Previously requested verdict+XAI in one call (~10 fields), now two calls (~5 fields each).
+
+**Environment Control**: Set `XAI_ENABLED=false` to disable XAI generation (defaults to true).
+
+**Type Definitions**: `packages/shared-types/src/index.ts` - `XaiMetadata` (base), `ComplianceXaiMetadata` (extends with rule hits/evidence).
+
+EOF
+"]} to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shellователь to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell to=functions.shell ಮುಖ to=functions.shell to=functions.shell to=functions.shell to=functions.shell\
