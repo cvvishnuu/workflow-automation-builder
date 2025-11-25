@@ -545,6 +545,153 @@ Result:
 
 ---
 
+## Segment 9: Explainable AI (XAI) Implementation ✅ 100% COMPLETE
+**Goal**: Provide transparency and explainability for AI-generated content and compliance decisions
+
+### Overview
+
+The platform implements **two separate XAI systems**:
+1. **Message Generation XAI** - Explains how AI generated marketing content
+2. **Compliance Check XAI** - Explains compliance decisions and rule violations
+
+### XAI Architecture
+
+**Design Pattern**: Two-step API call approach for compliance to avoid token limits
+- **Step 1**: Get compliance verdict (isPassed, riskScore, violations)
+- **Step 2**: Get explainability metadata (reasoning, confidence, rule hits)
+
+### Implementation Details
+
+#### 1. Message Generation XAI
+**Location**: `apps/backend/src/bfsi/services/ai-content.service.ts`
+
+**Single API Call Approach**:
+- Gemini generates both content and XAI in one response
+- Structured JSON schema with reasoning trace, decision factors, confidence
+- Output field: `xai` (type: `XaiMetadata`)
+
+**Output Structure**:
+```typescript
+{
+  content: "Generated message...",
+  xai: {
+    reasoningTrace: ["Step 1", "Step 2", ...],
+    decisionFactors: ["Tone", "Compliance", ...],
+    confidence: 0.85,
+    featureContributions: [
+      { feature: "tone", weight: 0.8, impact: "influenced formality" }
+    ]
+  }
+}
+```
+
+#### 2. Compliance Check XAI
+**Location**: `apps/backend/src/compliance-rag/compliance-rag.service.ts`
+
+**Two-step API Call Approach** (fixed to prevent MAX token errors):
+- **Call 1** (`buildCompliancePrompt`, lines 116-141): Returns verdict only
+  - Schema: `{ isPassed, riskScore, violations, missingDisclaimers, summary }`
+  - Keeps response under 2000 token limit
+- **Call 2** (`fetchComplianceXai`, lines 560-609): Returns XAI only
+  - Schema: `{ reasoning_trace, decision_factors, rule_hits, evidence, confidence }`
+  - Separate small response
+
+**Output Structure**:
+```typescript
+{
+  isPassed: false,
+  riskScore: 75,
+  compliance_xai: {
+    reasoningTrace: ["Evaluated against RBI rules", "Found critical violation"],
+    decisionFactors: ["RBI prohibited terms", "Missing disclaimers"],
+    confidence: 0.92,
+    ruleHits: [
+      {
+        rule: "RBI",
+        severity: "critical",
+        reason: "Guaranteed returns prohibited",
+        evidence: "guaranteed returns"
+      }
+    ],
+    evidence: [
+      { sourceId: "RBI-001", text: "Cannot guarantee investment returns" }
+    ]
+  }
+}
+```
+
+### XAI Type Definitions
+**Location**: `packages/shared-types/src/index.ts` (lines 32-59)
+
+**Base XAI Metadata**:
+```typescript
+export interface XaiMetadata {
+  reasoningTrace?: string[];
+  decisionFactors?: string[];
+  confidence?: number; // 0-1
+  featureContributions?: XaiFeatureContribution[];
+}
+```
+
+**Compliance-Specific XAI** (extends base):
+```typescript
+export interface ComplianceXaiMetadata extends XaiMetadata {
+  ruleHits?: ComplianceRuleHit[];
+  evidence?: Array<{ sourceId?: string; text: string }>;
+  xaiError?: string;
+}
+```
+
+### Field Naming Convention
+- **Message Generation**: `xai` field (base XaiMetadata)
+- **Compliance Check**: `compliance_xai` field (ComplianceXaiMetadata)
+- Clear separation prevents confusion between the two XAI types
+
+### Key Fix: MAX Token Error Resolution
+**Problem**: Compliance RAG was requesting both verdict and XAI in one call, exceeding Gemini's 2000 token output limit
+**Solution**: Split into two API calls - verdict first, then XAI separately
+**File Modified**: `apps/backend/src/compliance-rag/compliance-rag.service.ts` (lines 116-141)
+**Before**: Single call with nested XAI schema (~10 fields)
+**After**: Two calls with ~5 fields each, both under token limit
+
+### Files Modified
+
+**Backend Services**:
+- `apps/backend/src/bfsi/services/ai-content.service.ts` - Message generation XAI (lines 229-243)
+- `apps/backend/src/compliance-rag/compliance-rag.service.ts` - Compliance XAI (lines 116-141, 560-609)
+
+**Executors**:
+- `apps/backend/src/bfsi/executors/ai-content-generator.executor.ts` - Attaches `xai` field (line 140)
+- `apps/backend/src/bfsi/executors/compliance-checker.executor.ts` - Attaches `compliance_xai` field (line 164)
+
+**Type Definitions**:
+- `packages/shared-types/src/index.ts` - XAI interfaces (lines 32-59)
+
+### Testing
+**Test Payload**: `/tmp/xai_payload.json`
+```json
+{
+  "input": {
+    "csvData": [...],
+    "prompt": "Generate WhatsApp message...",
+    "tone": "professional"
+  },
+  "description": "XAI Testing"
+}
+```
+
+### Verification Checklist
+- ✅ Two separate API calls for compliance (verdict + XAI)
+- ✅ Message generation includes XAI in single call
+- ✅ Field naming: `xai` vs `compliance_xai`
+- ✅ Both stay under token limits (< 2000 tokens each)
+- ✅ Fallback XAI generated if Gemini fails
+- ✅ Type definitions in shared-types package
+
+**Status**: Implemented and verified, ready for testing
+
+---
+
 ## Notes
 - Mock user created: `user_123` (clerk_user_123, demo@example.com)
 - Main user: cvishnuu01@gmail.com (Clerk ID: user_34CVC4vAJIDZAJQ4N12degrk4P3)
@@ -552,3 +699,4 @@ Result:
 - Frontend running on http://localhost:3000
 - Database: PostgreSQL on localhost:5432
 - Gemini API Key: Configured for both content generation and RAG compliance
+- XAI Environment Variable: `XAI_ENABLED` (default: true, set to `false` to disable)

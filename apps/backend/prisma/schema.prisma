@@ -237,7 +237,7 @@ model ApiKey {
   description String? // Optional description of the API key usage
   workflowId  String // Which agent/workflow this key can access
   projectId   String? // Which customer project owns this key
-  usageLimit  Int      @default(10000) // Monthly execution limit
+  usageLimit  Int      @default(100) // Monthly execution limit
   usageCount  Int      @default(0) // Current month usage count
   lastUsedAt  DateTime? // Last time this key was used
   isActive    Boolean  @default(true)

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Compliance Checker Node Executor
  * Validates content against BFSI regulations and logs to audit trail
@@ -7,6 +8,7 @@
  * - Dependency Injection: Receives services via constructor
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Injectable } from '@nestjs/common';
 import { BaseNodeExecutor } from '../../nodes/executors/base-node.executor';
 import {
@@ -159,6 +161,8 @@ export class ComplianceCheckerNodeExecutor extends BaseNodeExecutor {
             })),
             compliance_suggestions: complianceResult.suggestions,
             compliance_summary: complianceResult.summary,
+            compliance_xai: complianceResult.xai,
+            compliance_xai_error: complianceResult.xaiError,
           });
         } catch (error) {
           processedRows.push({

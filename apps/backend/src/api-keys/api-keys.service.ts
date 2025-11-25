@@ -3,11 +3,7 @@
  * Business logic for managing API keys (admin only)
  */
 
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { createHash, randomBytes } from 'crypto';
 
@@ -68,7 +64,7 @@ export class ApiKeysService {
         description: dto.description,
         workflowId: dto.workflowId,
         projectId: dto.projectId,
-        usageLimit: dto.usageLimit || 10000,
+        usageLimit: dto.usageLimit || 100,
         expiresAt: dto.expiresAt,
         webhookUrl: dto.webhookUrl,
         webhookEvents: dto.webhookEvents as any,
@@ -313,7 +309,7 @@ export class ApiKeysService {
         acc[item.status] = item._count;
         return acc;
       },
-      {} as Record<string, number>,
+      {} as Record<string, number>
     );
 
     return {
@@ -321,9 +317,7 @@ export class ApiKeysService {
       usageCount: apiKey.usageCount,
       usageLimit: apiKey.usageLimit,
       usagePercentage:
-        apiKey.usageLimit > 0
-          ? Math.round((apiKey.usageCount / apiKey.usageLimit) * 100)
-          : 0,
+        apiKey.usageLimit > 0 ? Math.round((apiKey.usageCount / apiKey.usageLimit) * 100) : 0,
       lastUsedAt: apiKey.lastUsedAt,
       executionStats: stats,
     };

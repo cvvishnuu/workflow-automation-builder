@@ -3,12 +3,7 @@
  * Validates JWT tokens from Clerk and extracts user information
  */
 
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { verifyToken } from '@clerk/backend';
 import { UsersService } from '../users/users.service';
@@ -22,7 +17,22 @@ export class ClerkAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    const apiKey = this.extractApiKeyFromHeader(request);
     const token = this.extractTokenFromHeader(request);
+
+    // Allow API key-based access for trusted services (e.g., BCG)
+    if (apiKey) {
+      const configuredKey = this.configService.get<string>('PUBLIC_API_KEY');
+      if (configuredKey && apiKey === configuredKey) {
+        // attach a service user context
+        request.user = {
+          userId: 'service-api-key',
+          clerkId: 'service-api-key',
+          sessionId: 'service-api-key',
+        };
+        return true;
+      }
+    }
 
     if (!token) {
       throw new UnauthorizedException('No authentication token provided');
@@ -62,7 +72,7 @@ export class ClerkAuthGuard implements CanActivate {
       // Attach user info to request (use database user ID for foreign keys)
       request.user = {
         userId: dbUser.id, // Database user ID (UUID) - this is what we use for foreign keys
-        clerkId: clerkId,  // Clerk user ID - for reference
+        clerkId: clerkId, // Clerk user ID - for reference
         sessionId: payload.sid,
       };
 
@@ -82,5 +92,15 @@ export class ClerkAuthGuard implements CanActivate {
 
     const [type, token] = authorization.split(' ');
     return type === 'Bearer' ? token : undefined;
+  }
+
+  private extractApiKeyFromHeader(request: any): string | undefined {
+    const bearer = this.extractTokenFromHeader(request);
+    return (
+      request.headers['x-api-key'] ||
+      request.headers['api-key'] ||
+      // treat Authorization Bearer as API key if it matches the configured key
+      bearer
+    );
   }
 }

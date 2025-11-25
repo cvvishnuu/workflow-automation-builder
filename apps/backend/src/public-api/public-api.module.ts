@@ -11,8 +11,11 @@ import { WebhookListenerService } from './webhook-listener.service';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { RateLimitGuard } from './guards/rate-limit.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { BfsiModule } from '../bfsi/bfsi.module';
+import { ComplianceRAGModule } from '../compliance-rag/compliance-rag.module';
 
 @Module({
+  imports: [BfsiModule, ComplianceRAGModule],
   controllers: [PublicApiController],
   providers: [
     PublicApiService,
