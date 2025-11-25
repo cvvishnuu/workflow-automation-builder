@@ -28,18 +28,48 @@ export class ComplianceRAGService {
 
   // BFSI Compliance Knowledge Base (SIMPLIFIED for faster processing)
   private readonly COMPLIANCE_KNOWLEDGE_BASE = `
-**CRITICAL Violations (Reject immediately):**
-- Guaranteed returns, assured profit, 100% safe, no risk, risk-free
+**ALLOWED Communications (NOT violations):**
+- Financial product promotions (credit cards, loans, insurance) to EXISTING customers are ALLOWED
+- WhatsApp/SMS/Email messages to existing customers with opt-out are COMPLIANT
+- Do NOT flag promotional content as "unsolicited" for existing bank customers
+- These are legitimate business communications, not spam
 
-**Required Disclaimers:**
-- Loans: "Subject to credit approval, terms apply"
-- Investments: "Subject to market risks, read documents carefully"
-- Insurance: "Terms and exclusions apply"
+**CRITICAL Violations (Auto-fail):**
+- Guaranteed returns, assured profit, 100% safe, no risk, risk-free
+- These are ALWAYS violations regardless of other factors
+
+**MANDATORY Product-Specific Disclaimers:**
+
+CREDIT CARDS (ALL three required):
+1. "Subject to credit approval" - RBI MANDATORY
+2. "Terms and conditions apply"
+3. "Subject to eligibility criteria"
+Missing ANY disclaimer = HIGH severity violation
+
+LOANS:
+- "Subject to credit approval"
+- "Terms and conditions apply"
+- "Processing fees may apply"
+
+INVESTMENTS/MUTUAL FUNDS:
+- "Subject to market risks"
+- "Read all scheme-related documents carefully"
+- "Past performance is not indicative of future returns"
+
+INSURANCE:
+- "Terms, conditions, and exclusions apply"
+- "Please read the policy document carefully"
+
+**UCC Compliance (Marketing Messages):**
+- For EXISTING bank customers: Opt-out language is sufficient (e.g., "Reply STOP to opt-out")
+- For NEW/UNKNOWN customers: Must have documented explicit opt-in
+- IMPORTANT: Messages to existing customers WITH opt-out language are compliant
+- Missing opt-out = MEDIUM severity (not auto-fail if targeting existing customers)
 
 **Forbidden Claims:**
-- Exaggerated promises without proof
+- Exaggerated promises without proof ("unparalleled", "best ever")
 - Misleading comparisons
-- Pressure tactics ("Act now or miss out")
+- Pressure tactics ("Act now or miss out", "Limited time only")
 `;
 
   constructor(private configService: ConfigService) {
@@ -72,10 +102,27 @@ export class ComplianceRAGService {
       const prompt = this.buildCompliancePrompt(content, contentType, productCategory);
 
       // First call: compliance verdict (without XAI)
-      const verdictResponse = await this.callGeminiWithRetry(prompt);
+      // Use 4000 tokens (matching content generation) for verdict
+      // Gemini 2.5 Flash uses ~1200 tokens for internal reasoning, rest for JSON output
+      const verdictResponse = await this.callGeminiWithRetry(prompt, 4000);
+
+      // Debug logging to diagnose empty response issue
+      console.error(
+        '[ComplianceRAGService] Full compliance verdict response:',
+        JSON.stringify(verdictResponse, null, 2)
+      );
+
       const verdictText = verdictResponse.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
       if (!verdictText) {
+        this.logger.error(
+          '[ComplianceRAGService] Gemini returned empty verdictText. Response structure:',
+          {
+            hasCandidates: !!verdictResponse.candidates,
+            candidatesLength: verdictResponse.candidates?.length,
+            firstCandidate: verdictResponse.candidates?.[0],
+          }
+        );
         throw new Error('Empty response from Gemini API');
       }
 
@@ -116,14 +163,38 @@ export class ComplianceRAGService {
   private buildCompliancePrompt(
     content: string,
     contentType: string,
-    _productCategory?: string
+    productCategory?: string
   ): string {
-    return `BFSI compliance check for ${contentType}.
+    return `BFSI compliance check for ${contentType} ${productCategory ? `(${productCategory})` : ''}.
 
 Content: "${content}"
 
-Rules:
+Compliance Rules:
 ${this.COMPLIANCE_KNOWLEDGE_BASE}
+
+EVALUATION INSTRUCTIONS:
+1. Check for CRITICAL violations (guaranteed returns, etc.) → Auto-fail if found
+2. For credit cards: Verify ALL THREE disclaimers are present
+3. UCC compliance: Messages to EXISTING customers with opt-out language are COMPLIANT (not a violation)
+4. Only flag missing opt-out as MEDIUM severity, NOT critical (existing customers don't need explicit opt-in)
+5. Exaggerated claims: Check for "unparalleled", "best ever", etc.
+6. IMPORTANT: Financial product promotions (credit cards, loans, insurance) to existing customers are ALLOWED and NOT violations
+
+IMPORTANT CONTEXT:
+- These messages are sent to EXISTING bank customers (not cold outreach)
+- Existing customer relationship = legitimate business communication
+- Opt-out language ("Reply STOP") satisfies UCC/TRAI requirements for existing customers
+- Banks are ALLOWED to promote products to existing customers with disclaimers and opt-out
+
+SCORING LOGIC (riskScore represents RISK LEVEL):
+- Start at 0 risk points (0 = no risk = compliant)
+- Add risk points for violations:
+  - CRITICAL violation: +100 (auto-fail)
+  - HIGH severity (missing mandatory disclaimer): +30 each
+  - MEDIUM severity (exaggerated claim): +15 each
+  - LOW severity: +5 each
+- Final riskScore: 0-100 (0-49 = pass, 50+ = fail)
+- If NO violations found, riskScore = 0 and isPassed = true
 
 Return JSON only, with this schema:
 {
@@ -138,7 +209,7 @@ Constraints:
 - Respond ONLY in JSON.
 - Keep summary under 120 characters.
 - List all violations clearly with severity and reason.
-- Include all missing disclaimers.`;
+- Include all missing disclaimers in missingDisclaimers array.`;
   }
 
   private buildXaiPrompt(payload: {
@@ -147,37 +218,45 @@ Constraints:
     verdict: ComplianceCheckResult;
   }): string {
     const { content, contentType, verdict } = payload;
-    return `You are an AI compliance auditor explaining a verdict for a ${contentType}.
+    return `Explain compliance verdict for ${contentType}.
 
 Content: "${content}"
 
-Verdict JSON:
-${JSON.stringify({
-  isPassed: verdict.isPassed,
-  riskScore: verdict.riskScore,
-  flaggedTerms: verdict.flaggedTerms,
-  summary: verdict.summary,
-})}
+Verdict: ${verdict.isPassed ? 'PASS' : 'FAIL'}, Risk: ${verdict.riskScore}
 
-Return ONLY JSON with this schema:
+IMPORTANT: This is EXPLANATION ONLY. Do NOT make new compliance judgments.
+Provide a detailed explanation of why the existing verdict was reached.
+
+Return JSON only:
 {
-  "reasoning_trace": ["max 3 short sentences explaining pass/fail"],
-  "decision_factors": ["top 3 rules or checks considered"],
+  "reasoning_trace": ["step-by-step evaluation process", "3-6 detailed steps explaining checks performed"],
+  "decision_factors": ["key compliance rules evaluated", "regulatory requirements checked", "top 5 factors"],
   "confidence": 0-1,
   "rule_hits": [
-    {"rule": "rule/category", "severity": "low|medium|high|critical|satisfied", "reason": "why", "evidence": "snippet"}
+    {
+      "rule": "RBI/SEBI/IRDAI/TRAI rule name",
+      "severity": "info",
+      "reason": "detailed explanation of how this rule was evaluated",
+      "evidence": "specific text from the message that was checked"
+    }
   ],
   "feature_contributions": [
-    {"feature": "disclaimer|tone|term", "weight": 0-1, "impact": "how it affected risk"}
-  ],
-  "evidence": [{"sourceId": "rule or data source", "text": "supporting evidence"}]
+    {
+      "feature": "compliance_factor",
+      "weight": 0-1,
+      "impact": "how this factor influenced the pass/fail decision"
+    }
+  ]
 }
 
-Constraints:
-- Respond ONLY in JSON.
-- Keep reasoning_trace, decision_factors, and rule_hits concise (<=80 characters each item).
-- If no violations, explain why it still passed (rules satisfied).
-- If unsure, set confidence to a reasonable estimate (0-1).`;
+Guidelines:
+- Provide 3-6 detailed reasoning steps explaining the compliance evaluation
+- Include top 5 decision factors (regulatory rules, disclaimers, prohibited terms, etc.)
+- List all relevant rule_hits with specific evidence from the message
+- Use feature_contributions to explain key compliance factors (disclaimers, opt-out, tone, etc.)
+- Use "info" severity for explanatory rule_hits (not compliance judgments)
+- Make explanations educational and transparent
+- Omit empty arrays`;
   }
 
   /**
@@ -225,8 +304,25 @@ Constraints:
         }
       });
 
+      // Nuanced pass/fail logic:
+      // 1. Check for critical violations (guaranteed returns, etc.) → Auto-fail
+      // 2. Check for high severity violations (missing mandatory disclaimers) → Auto-fail if 2+
+      // 3. Otherwise trust Gemini's isPassed judgment
+      const hasCriticalViolation = flaggedTerms.some((t) => t.severity === 'critical');
+      const highSeverityCount = flaggedTerms.filter((t) => t.severity === 'high').length;
+
+      // More lenient pass logic:
+      // - Critical violations = auto-fail (guaranteed returns, etc.)
+      // - 2+ high severity = fail (multiple missing mandatory disclaimers)
+      // - Otherwise trust Gemini's isPassed field (AI knows best)
+      const shouldPass = hasCriticalViolation
+        ? false // Critical violation = always fail
+        : highSeverityCount >= 2
+          ? false // 2+ high severity = fail
+          : parsed.isPassed !== false; // Trust Gemini's judgment
+
       return {
-        isPassed: parsed.isPassed !== false && parsed.riskScore < 50,
+        isPassed: shouldPass,
         riskScore: Math.min(Math.max(parsed.riskScore || 0, 0), 100),
         flaggedTerms,
         suggestions,
@@ -431,7 +527,7 @@ Constraints:
   /**
    * Call Gemini with retries/backoff
    */
-  private async callGeminiWithRetry(prompt: string): Promise<any> {
+  private async callGeminiWithRetry(prompt: string, maxTokens: number = 800): Promise<any> {
     let lastError: any;
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
@@ -443,7 +539,7 @@ Constraints:
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               temperature: 0.3,
-              maxOutputTokens: 2000,
+              maxOutputTokens: maxTokens,
               responseMimeType: 'application/json',
             },
             safetySettings: [
@@ -554,10 +650,24 @@ Constraints:
   }): Promise<{ xai?: ComplianceXaiMetadata; xaiError?: string }> {
     try {
       const prompt = this.buildXaiPrompt(payload);
-      const data = await this.callGeminiWithRetry(prompt);
+      // Use 8000 tokens for XAI to match content generation token limits (prevents JSON truncation)
+      const data = await this.callGeminiWithRetry(prompt, 8000);
+
+      // Debug: Log full response to diagnose empty XAI
+      console.error(
+        '[ComplianceRAGService] Full compliance XAI API response:',
+        JSON.stringify(data, null, 2)
+      );
+
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
       if (!text) {
+        this.logger.error('[ComplianceRAGService] Gemini returned empty XAI text. Response:', {
+          hasCandidates: !!data.candidates,
+          firstCandidate: data.candidates?.[0],
+          finishReason: data.candidates?.[0]?.finishReason,
+          usageMetadata: data.usageMetadata,
+        });
         throw new Error('Empty XAI response from Gemini API');
       }
 

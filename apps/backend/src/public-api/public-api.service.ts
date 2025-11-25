@@ -4,16 +4,20 @@
  * Business logic for public API endpoints
  */
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ExecuteAgentDto } from './dto/execute-agent.dto';
+import { AIContentService } from '../bfsi/services/ai-content.service';
+import { ComplianceRAGService } from '../compliance-rag/compliance-rag.service';
 
 @Injectable()
 export class PublicApiService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly aiContentService: AIContentService,
+    private readonly complianceRAGService: ComplianceRAGService
   ) {}
 
   /**
@@ -225,7 +229,7 @@ export class PublicApiService {
         generation_error: row.generation_error,
         compliance_xai: row.compliance_xai,
         compliance_xai_error: row.compliance_xai_error,
-        // Convert risk score to compliance score (risk score: lower is better, compliance score: higher is better)
+        // riskScore: 0=no risk/100=high risk → complianceScore: 0=high risk/100=no risk (invert for display)
         complianceScore: 100 - (row.compliance_risk_score || row.complianceScore || 0),
         complianceStatus: this.mapComplianceStatus(row.compliance_status || row.complianceStatus),
         violations,
@@ -389,6 +393,265 @@ export class PublicApiService {
   }
 
   /**
+   * Reject and regenerate a single message
+   */
+  async rejectAndRegenerateMessage(
+    executionId: string,
+    workflowId: string,
+    rowId: number,
+    rejectReason: string,
+    _userId: string
+  ) {
+    // Get execution with approval data
+    const execution = await this.prisma.workflowExecution.findFirst({
+      where: {
+        id: executionId,
+        workflowId: workflowId,
+        status: 'pending_approval',
+      },
+    });
+
+    if (!execution) {
+      throw new NotFoundException('Execution not found or not pending approval');
+    }
+
+    // Get approval data
+    const approvalData = execution.approvalData as any;
+    if (!approvalData) {
+      throw new BadRequestException('Approval data not found');
+    }
+
+    // Extract rows from nested structure (check both locations)
+    const rows = approvalData.approvalData?.rows || approvalData.rows || [];
+
+    if (rows.length === 0) {
+      throw new BadRequestException('No rows found in approval data');
+    }
+
+    // Row IDs in frontend are 1-indexed, array is 0-indexed
+    const rowIndex = rowId - 1;
+
+    if (rowIndex < 0 || rowIndex >= rows.length) {
+      throw new NotFoundException(
+        `Message with row ID ${rowId} not found (total rows: ${rows.length})`
+      );
+    }
+
+    const originalRow = rows[rowIndex];
+
+    // Get the original execution input to extract prompt, tone, etc.
+    const executionInput = execution.input as any;
+    const csvData = executionInput?.csvData || [];
+    const csvRow = csvData.find((r: any) => r.customer_id === originalRow.customer_id);
+
+    if (!csvRow) {
+      throw new BadRequestException('Original CSV data not found for this customer');
+    }
+
+    // Build personalization variables from CSV row
+    const variables: Record<string, string> = {};
+    for (const [key, value] of Object.entries(csvRow)) {
+      if (value !== undefined && value !== null) {
+        variables[key] = String(value);
+      }
+    }
+
+    // Build customer context
+    const customerInfo: string[] = [];
+    if (csvRow.name) customerInfo.push(`Customer: ${csvRow.name}`);
+    if (csvRow.age) customerInfo.push(`Age: ${csvRow.age}`);
+    if (csvRow.city) customerInfo.push(`City: ${csvRow.city}`);
+    if (csvRow.occupation) customerInfo.push(`Occupation: ${csvRow.occupation}`);
+    const contextString =
+      customerInfo.length > 0 ? `Customer Profile:\n${customerInfo.join('\n')}` : '';
+
+    // Regenerate content with reject reason included in prompt
+    const enhancedPrompt = executionInput?.prompt
+      ? `${executionInput.prompt}\n\nIMPORTANT - Previous message was rejected for the following reason:\n"${rejectReason}"\nPlease address this feedback in the new message.`
+      : `Generate marketing message.\n\nIMPORTANT - Previous message was rejected for the following reason:\n"${rejectReason}"\nPlease address this feedback in the new message.`;
+
+    try {
+      // Regenerate message
+      const regeneratedContent = await this.aiContentService.generateContent({
+        contentType: executionInput?.contentType || 'whatsapp',
+        purpose: enhancedPrompt,
+        targetAudience: executionInput?.targetAudience || '',
+        keyPoints: executionInput?.keyPoints || '',
+        tone: executionInput?.tone || 'professional',
+        maxLength: executionInput?.maxLength,
+        variables,
+        context: contextString,
+      });
+
+      // Rerun compliance check on regenerated content
+      const complianceResult = await this.complianceRAGService.checkComplianceWithRAG({
+        content: regeneratedContent.content,
+        contentType: executionInput?.contentType || 'whatsapp',
+        productCategory: executionInput?.productCategory || 'general',
+      });
+
+      // Update the row with new message and compliance data
+      rows[rowIndex] = {
+        ...originalRow,
+        generated_content: regeneratedContent.content,
+        xai: regeneratedContent.xai,
+        xai_error: regeneratedContent.xaiError,
+        compliance_status: complianceResult.isPassed ? 'passed' : 'failed',
+        compliance_risk_score: complianceResult.riskScore,
+        compliance_flagged_terms: complianceResult.flaggedTerms,
+        compliance_suggestions: complianceResult.suggestions,
+        compliance_xai: complianceResult.xai,
+        compliance_xai_error: complianceResult.xaiError,
+        isRegenerated: true,
+        regeneratedAt: new Date().toISOString(),
+        rejectReason: rejectReason,
+      };
+
+      // Update execution with modified approval data
+      // Preserve the nested structure if it exists
+      const updatedApprovalData = approvalData.approvalData
+        ? {
+            ...approvalData,
+            approvalData: {
+              ...approvalData.approvalData,
+              rows,
+            },
+          }
+        : {
+            ...approvalData,
+            rows,
+          };
+
+      await this.prisma.workflowExecution.update({
+        where: { id: executionId },
+        data: {
+          approvalData: updatedApprovalData as any,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Message regenerated successfully',
+        updatedRow: rows[rowIndex],
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to regenerate message: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update a single message (manual edit)
+   */
+  async updateMessage(
+    executionId: string,
+    workflowId: string,
+    rowId: number,
+    updatedMessage: string,
+    recheckCompliance: boolean,
+    userId: string
+  ) {
+    // Get execution with approval data
+    const execution = await this.prisma.workflowExecution.findFirst({
+      where: {
+        id: executionId,
+        workflowId: workflowId,
+        status: 'pending_approval',
+      },
+    });
+
+    if (!execution) {
+      throw new NotFoundException('Execution not found or not pending approval');
+    }
+
+    // Get approval data
+    const approvalData = execution.approvalData as any;
+    if (!approvalData) {
+      throw new BadRequestException('Approval data not found');
+    }
+
+    // Extract rows from nested structure (check both locations)
+    const rows = approvalData.approvalData?.rows || approvalData.rows || [];
+
+    if (rows.length === 0) {
+      throw new BadRequestException('No rows found in approval data');
+    }
+
+    // Row IDs in frontend are 1-indexed, array is 0-indexed
+    const rowIndex = rowId - 1;
+
+    if (rowIndex < 0 || rowIndex >= rows.length) {
+      throw new NotFoundException(
+        `Message with row ID ${rowId} not found (total rows: ${rows.length})`
+      );
+    }
+
+    const originalRow = rows[rowIndex];
+
+    try {
+      // Update the message
+      rows[rowIndex] = {
+        ...originalRow,
+        generated_content: updatedMessage,
+        isEdited: true,
+        editedAt: new Date().toISOString(),
+        editedBy: userId,
+      };
+
+      // Optionally recheck compliance on edited message
+      if (recheckCompliance) {
+        const executionInput = execution.input as any;
+        const complianceResult = await this.complianceRAGService.checkComplianceWithRAG({
+          content: updatedMessage,
+          contentType: executionInput?.contentType || 'whatsapp',
+          productCategory: executionInput?.productCategory || 'general',
+        });
+
+        rows[rowIndex] = {
+          ...rows[rowIndex],
+          compliance_status: complianceResult.isPassed ? 'passed' : 'failed',
+          compliance_risk_score: complianceResult.riskScore,
+          compliance_flagged_terms: complianceResult.flaggedTerms,
+          compliance_suggestions: complianceResult.suggestions,
+          compliance_xai: complianceResult.xai,
+          compliance_xai_error: complianceResult.xaiError,
+        };
+      }
+
+      // Update execution with modified approval data
+      // Preserve the nested structure if it exists
+      const updatedApprovalData = approvalData.approvalData
+        ? {
+            ...approvalData,
+            approvalData: {
+              ...approvalData.approvalData,
+              rows,
+            },
+          }
+        : {
+            ...approvalData,
+            rows,
+          };
+
+      await this.prisma.workflowExecution.update({
+        where: { id: executionId },
+        data: {
+          approvalData: updatedApprovalData as any,
+        },
+      });
+
+      return {
+        success: true,
+        message: recheckCompliance
+          ? 'Message updated and compliance rechecked successfully'
+          : 'Message updated successfully',
+        updatedRow: rows[rowIndex],
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to update message: ${error.message}`);
+    }
+  }
+
+  /**
    * Truncate CSV data to max 100 rows
    */
   private truncateCSVData(input: any): any {
@@ -397,11 +660,11 @@ export class PublicApiService {
     }
 
     // Check if input has csvData array
-    if (Array.isArray(input.csvData) && input.csvData.length > 100) {
-      console.log(`[PublicAPI] Truncating CSV data from ${input.csvData.length} rows to 100 rows`);
+    if (Array.isArray(input.csvData) && input.csvData.length > 10) {
+      console.log(`[PublicAPI] Truncating CSV data from ${input.csvData.length} rows to 10 rows`);
       return {
         ...input,
-        csvData: input.csvData.slice(0, 100),
+        csvData: input.csvData.slice(0, 10),
         _truncated: true,
         _originalRowCount: input.csvData.length,
       };

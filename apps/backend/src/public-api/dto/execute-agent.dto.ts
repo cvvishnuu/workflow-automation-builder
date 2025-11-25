@@ -2,7 +2,7 @@
  * DTOs for Public API
  */
 
-import { IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * DTO for executing an agent via public API
@@ -36,4 +36,27 @@ export class RejectExecutionDto {
   @IsOptional()
   @MaxLength(1000)
   comment?: string; // Optional rejection comment
+}
+
+/**
+ * DTO for rejecting and regenerating a single message
+ */
+export class RejectMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  rejectReason: string; // Reason for rejection - used to improve regeneration
+}
+
+/**
+ * DTO for updating a single message
+ */
+export class UpdateMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  updatedMessage: string; // The edited message text
+
+  @IsBoolean()
+  @IsOptional()
+  recheckCompliance?: boolean; // Whether to rerun compliance check on edited message
 }

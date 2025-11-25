@@ -11,6 +11,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Param,
   UseGuards,
@@ -25,6 +26,8 @@ import {
   ExecuteAgentDto,
   ApproveExecutionDto,
   RejectExecutionDto,
+  RejectMessageDto,
+  UpdateMessageDto,
 } from './dto/execute-agent.dto';
 
 @Controller('public')
@@ -44,17 +47,12 @@ export class PublicApiController {
   async executeAgent(
     @Param('workflowId') workflowId: string,
     @Body() dto: ExecuteAgentDto,
-    @Req() req: any,
+    @Req() req: any
   ) {
     const apiKeyId = req.apiKey.id;
     const userId = req.userId;
 
-    return this.publicApiService.executeAgent(
-      workflowId,
-      userId,
-      apiKeyId,
-      dto,
-    );
+    return this.publicApiService.executeAgent(workflowId, userId, apiKeyId, dto);
   }
 
   /**
@@ -105,16 +103,11 @@ export class PublicApiController {
   async approveExecution(
     @Param('id') id: string,
     @Body() dto: ApproveExecutionDto,
-    @Req() req: any,
+    @Req() req: any
   ) {
     const workflowId = req.workflowId;
     const userId = req.userId;
-    return this.publicApiService.approveExecution(
-      id,
-      workflowId,
-      userId,
-      dto.comment,
-    );
+    return this.publicApiService.approveExecution(id, workflowId, userId, dto.comment);
   }
 
   /**
@@ -126,18 +119,64 @@ export class PublicApiController {
    */
   @Post('executions/:id/reject')
   @HttpCode(HttpStatus.OK)
-  async rejectExecution(
+  async rejectExecution(@Param('id') id: string, @Body() dto: RejectExecutionDto, @Req() req: any) {
+    const workflowId = req.workflowId;
+    const userId = req.userId;
+    return this.publicApiService.rejectExecution(id, workflowId, userId, dto.comment);
+  }
+
+  /**
+   * Reject and regenerate a single message
+   * POST /api/public/executions/:id/messages/:rowId/reject
+   *
+   * @param id - Execution ID
+   * @param rowId - Row ID (customer row number)
+   * @param dto - Rejection reason
+   */
+  @Post('executions/:id/messages/:rowId/reject')
+  @HttpCode(HttpStatus.OK)
+  async rejectMessage(
     @Param('id') id: string,
-    @Body() dto: RejectExecutionDto,
-    @Req() req: any,
+    @Param('rowId') rowId: string,
+    @Body() dto: RejectMessageDto,
+    @Req() req: any
   ) {
     const workflowId = req.workflowId;
     const userId = req.userId;
-    return this.publicApiService.rejectExecution(
+    return this.publicApiService.rejectAndRegenerateMessage(
       id,
       workflowId,
-      userId,
-      dto.comment,
+      parseInt(rowId, 10),
+      dto.rejectReason,
+      userId
+    );
+  }
+
+  /**
+   * Update a single message (manual edit)
+   * PATCH /api/public/executions/:id/messages/:rowId
+   *
+   * @param id - Execution ID
+   * @param rowId - Row ID (customer row number)
+   * @param dto - Updated message data
+   */
+  @Patch('executions/:id/messages/:rowId')
+  @HttpCode(HttpStatus.OK)
+  async updateMessage(
+    @Param('id') id: string,
+    @Param('rowId') rowId: string,
+    @Body() dto: UpdateMessageDto,
+    @Req() req: any
+  ) {
+    const workflowId = req.workflowId;
+    const userId = req.userId;
+    return this.publicApiService.updateMessage(
+      id,
+      workflowId,
+      parseInt(rowId, 10),
+      dto.updatedMessage,
+      dto.recheckCompliance || false,
+      userId
     );
   }
 }

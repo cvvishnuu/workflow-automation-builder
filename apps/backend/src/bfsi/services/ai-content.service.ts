@@ -347,7 +347,41 @@ export class AIContentService {
         break;
     }
 
+    // Detect product type from context and enforce strict disclaimer requirements
+    const fullContext =
+      `${request.context || ''} ${request.keyPoints || ''} ${request.targetAudience || ''}`.toLowerCase();
+    let productSpecificRequirements = '';
+
+    if (fullContext.includes('credit card') || fullContext.includes('credit-card')) {
+      productSpecificRequirements = `\n\nMANDATORY FOR CREDIT CARDS - You MUST include ALL three disclaimers at the end:
+1. "Subject to credit approval"
+2. "Terms and conditions apply"
+3. "Subject to eligibility criteria"
+
+CRITICAL: Do NOT proceed without these exact disclaimers. Missing any disclaimer will result in regulatory non-compliance.`;
+    } else if (fullContext.includes('loan') || fullContext.includes('lending')) {
+      productSpecificRequirements = `\n\nMANDATORY FOR LOANS - You MUST include these disclaimers:
+- "Subject to credit approval"
+- "Terms and conditions apply"
+- "Processing fees may apply"`;
+    } else if (
+      fullContext.includes('investment') ||
+      fullContext.includes('mutual fund') ||
+      fullContext.includes('equity')
+    ) {
+      productSpecificRequirements = `\n\nMANDATORY FOR INVESTMENTS - You MUST include:
+- "Mutual fund investments are subject to market risks"
+- "Read all scheme-related documents carefully"
+- "Past performance is not indicative of future returns"`;
+    } else if (fullContext.includes('insurance')) {
+      productSpecificRequirements = `\n\nMANDATORY FOR INSURANCE - You MUST include:
+- "Terms, conditions, and exclusions apply"
+- "Please read the policy document carefully"`;
+    }
+
     prompt += `\nIMPORTANT: Ensure content is compliant with BFSI regulations (no misleading claims, clear disclosures, professional language).`;
+    prompt += productSpecificRequirements;
+    prompt += `\n\nUCC COMPLIANCE: End every marketing message with: "You're receiving this as a valued [Bank Name] customer. Reply STOP to opt-out of promotional messages."`;
 
     return prompt;
   }
@@ -362,11 +396,12 @@ Your content must:
 1. Be compliant with BFSI regulations (RBI, SEBI, IRDAI guidelines)
 2. Avoid misleading claims or exaggerations
 3. Use clear, professional language
-4. Include necessary disclaimers when discussing financial products
+4. Include ALL mandatory disclaimers based on product type
 5. Be accurate and factual
 6. Respect customer privacy
 7. Avoid guaranteed returns or unrealistic promises
 8. Follow Data Protection and Privacy Act (DPDPA) guidelines
+9. Include consent/opt-out language for TRAI UCC compliance
 
 When generating content:
 - Use appropriate tone based on the request
@@ -376,11 +411,32 @@ When generating content:
 - Maintain brand professionalism
 - Ensure regulatory compliance
 
-For disclaimers on financial products, use phrases like:
+MANDATORY DISCLAIMERS BY PRODUCT TYPE:
+
+For CREDIT CARDS (MUST include ALL three):
+- "Subject to credit approval"
 - "Terms and conditions apply"
 - "Subject to eligibility criteria"
-- "Returns are subject to market risks"
-- "Please read all scheme-related documents carefully"`;
+
+For LOANS:
+- "Subject to credit approval"
+- "Terms and conditions apply"
+- "Processing fees may apply"
+
+For INVESTMENTS/MUTUAL FUNDS:
+- "Mutual fund investments are subject to market risks"
+- "Read all scheme-related documents carefully"
+- "Past performance is not indicative of future returns"
+
+For INSURANCE:
+- "Terms, conditions, and exclusions apply"
+- "Please read the policy document carefully"
+
+For UCC COMPLIANCE (ALL marketing messages):
+Include opt-out language at the end:
+"You're receiving this as a valued [Bank Name] customer. Reply STOP to opt-out of promotional messages."
+
+CRITICAL: Never use words like "guaranteed", "assured", "100% safe", "no risk", or "risk-free".`;
   }
 
   /**

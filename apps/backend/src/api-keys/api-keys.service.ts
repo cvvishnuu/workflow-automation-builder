@@ -64,7 +64,7 @@ export class ApiKeysService {
         description: dto.description,
         workflowId: dto.workflowId,
         projectId: dto.projectId,
-        usageLimit: dto.usageLimit || 10000,
+        usageLimit: dto.usageLimit || 100,
         expiresAt: dto.expiresAt,
         webhookUrl: dto.webhookUrl,
         webhookEvents: dto.webhookEvents as any,

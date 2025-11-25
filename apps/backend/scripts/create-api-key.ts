@@ -24,7 +24,9 @@ async function main() {
   });
 
   if (!workflow) {
-    console.error(`❌ Workflow ${workflowId} not found. Please run: pnpm --filter @workflow/backend prisma:seed`);
+    console.error(
+      `❌ Workflow ${workflowId} not found. Please run: pnpm --filter @workflow/backend prisma:seed`
+    );
     process.exit(1);
   }
 
@@ -36,7 +38,7 @@ async function main() {
       description: 'API key for testing public API endpoints',
       workflowId: workflowId,
       projectId: 'bfsi-campaign-generator-test',
-      usageLimit: 1000,
+      usageLimit: 100,
       usageCount: 0,
       isActive: true,
     },
@@ -44,7 +46,7 @@ async function main() {
 
   console.log('\n✅ API Key created successfully!\n');
   console.log('════════════════════════════════════════════════════════════════');
-  console.log('🔑 API KEY (Save this - it won\'t be shown again):');
+  console.log("🔑 API KEY (Save this - it won't be shown again):");
   console.log(`   ${apiKey}`);
   console.log('════════════════════════════════════════════════════════════════');
   console.log(`\n📋 API Key Details:`);
