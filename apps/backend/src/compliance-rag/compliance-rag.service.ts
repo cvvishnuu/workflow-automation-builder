@@ -200,7 +200,14 @@ Return JSON only, with this schema:
 {
   "isPassed": boolean,
   "riskScore": 0-100,
-  "violations": [{"term": "text", "severity": "low|medium|high|critical", "reason": "why", "suggestion": "fix"}],
+  "scoreCalculation": "human-readable calculation formula showing how risk score was computed",
+  "violationsBreakdown": {
+    "critical_count": number,
+    "high_count": number,
+    "medium_count": number,
+    "low_count": number
+  },
+  "violations": [{"term": "text", "severity": "low|medium|high|critical", "reason": "why", "suggestion": "fix", "riskContribution": number}],
   "missingDisclaimers": ["required disclaimers not present"],
   "summary": "brief assessment"
 }
@@ -209,6 +216,9 @@ Constraints:
 - Respond ONLY in JSON.
 - Keep summary under 120 characters.
 - List all violations clearly with severity and reason.
+- For EACH violation, include "riskContribution" showing the risk points added (critical=100, high=30, medium=15, low=5).
+- Include "scoreCalculation" with formula, e.g., "2 MEDIUM (15×2=30) + 0 HIGH (0) = 30 total risk".
+- Include "violationsBreakdown" object with counts for each severity level.
 - Include all missing disclaimers in missingDisclaimers array.`;
   }
 
@@ -223,6 +233,7 @@ Constraints:
 Content: "${content}"
 
 Verdict: ${verdict.isPassed ? 'PASS' : 'FAIL'}, Risk: ${verdict.riskScore}
+Violations Found: ${verdict.flaggedTerms?.length || 0}
 
 IMPORTANT: This is EXPLANATION ONLY. Do NOT make new compliance judgments.
 Provide a detailed explanation of why the existing verdict was reached.
@@ -231,6 +242,15 @@ Return JSON only:
 {
   "reasoning_trace": ["step-by-step evaluation process", "3-6 detailed steps explaining checks performed"],
   "decision_factors": ["key compliance rules evaluated", "regulatory requirements checked", "top 5 factors"],
+  "score_breakdown": {
+    "calculation": "human-readable formula showing how ${verdict.riskScore} was computed",
+    "violations_by_severity": {
+      "critical": number,
+      "high": number,
+      "medium": number,
+      "low": number
+    }
+  },
   "confidence": 0-1,
   "rule_hits": [
     {
@@ -252,6 +272,8 @@ Return JSON only:
 Guidelines:
 - Provide 3-6 detailed reasoning steps explaining the compliance evaluation
 - Include top 5 decision factors (regulatory rules, disclaimers, prohibited terms, etc.)
+- INCLUDE "score_breakdown" with calculation formula, e.g., "2 MEDIUM violations (15×2) = 30 total risk"
+- Count violations by severity level (critical, high, medium, low)
 - List all relevant rule_hits with specific evidence from the message
 - Use feature_contributions to explain key compliance factors (disclaimers, opt-out, tone, etc.)
 - Use "info" severity for explanatory rule_hits (not compliance judgments)
@@ -377,6 +399,21 @@ Guidelines:
       decisionFactors: Array.isArray(xaiRoot?.decision_factors)
         ? xaiRoot.decision_factors.map((f: any) => String(f))
         : undefined,
+      scoreBreakdown: xaiRoot?.score_breakdown
+        ? {
+            calculation: xaiRoot.score_breakdown.calculation
+              ? String(xaiRoot.score_breakdown.calculation)
+              : undefined,
+            violationsBySeverity: xaiRoot.score_breakdown.violations_by_severity
+              ? {
+                  critical: Number(xaiRoot.score_breakdown.violations_by_severity.critical || 0),
+                  high: Number(xaiRoot.score_breakdown.violations_by_severity.high || 0),
+                  medium: Number(xaiRoot.score_breakdown.violations_by_severity.medium || 0),
+                  low: Number(xaiRoot.score_breakdown.violations_by_severity.low || 0),
+                }
+              : undefined,
+          }
+        : undefined,
       confidence:
         typeof xaiRoot?.confidence === 'number'
           ? Math.min(Math.max(xaiRoot.confidence, 0), 1)
@@ -415,6 +452,7 @@ Guidelines:
     const hasXai =
       (xai.reasoningTrace && xai.reasoningTrace.length > 0) ||
       (xai.decisionFactors && xai.decisionFactors.length > 0) ||
+      xai.scoreBreakdown !== undefined ||
       xai.confidence !== undefined ||
       (xai.featureContributions && xai.featureContributions.length > 0) ||
       (xai.ruleHits && xai.ruleHits.length > 0) ||

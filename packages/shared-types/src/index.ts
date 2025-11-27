@@ -41,6 +41,15 @@ export interface XaiMetadata {
   decisionFactors?: string[];
   confidence?: number; // 0-1
   featureContributions?: XaiFeatureContribution[];
+  scoreBreakdown?: {
+    calculation?: string; // Human-readable formula, e.g., "2 MEDIUM (15×2) = 30 total risk"
+    violationsBySeverity?: {
+      critical: number;
+      high: number;
+      medium: number;
+      low: number;
+    };
+  };
 }
 
 // Compliance-specific XAI (extends base XAI with rule/evidence context)
