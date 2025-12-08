@@ -703,6 +703,7 @@ export class WorkflowEngineService {
     userId: string;
     comment?: string;
     timestamp: Date;
+    approvalData?: any; // Latest approval data with regenerated/edited messages
   }) {
     console.log(`[Workflow Engine] Received execution.approved event for ${payload.executionId}`);
 

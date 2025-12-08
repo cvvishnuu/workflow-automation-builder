@@ -331,13 +331,20 @@ export class PublicApiService {
       },
     });
 
-    // Emit event to resume execution
+    // Refetch execution to get the LATEST approvalData (after any regenerations/edits)
+    const updatedExecution = await this.prisma.workflowExecution.findUnique({
+      where: { id: executionId },
+    });
+
+    // Emit event to resume execution with latest approvalData
+    // This ensures regenerated/edited messages are passed to next nodes
     this.eventEmitter.emit('execution.approved', {
       executionId,
       workflowId,
       userId,
       comment,
       timestamp: new Date(),
+      approvalData: updatedExecution?.approvalData, // Pass LATEST approval data from DB
     });
 
     return {
